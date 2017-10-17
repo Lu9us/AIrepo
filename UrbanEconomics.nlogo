@@ -6,7 +6,7 @@ breed [firms firm]
 
 people-own [firm! land-cost lov budget spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
-firms-own [wage-output product-cost]
+firms-own [wage-output base-product-cost]
 patches-own [p-land-cost belongs-to]
 
 to setup
@@ -26,8 +26,7 @@ end
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-
-
+    set base-land-cost random (40 * 0.25)
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
@@ -55,7 +54,10 @@ to setup-landlord-patches
     ifelse (pcolor = black)
     [
       set pcolor p-color
-      ask patch-here [set belongs-to myself]
+      ask patch-here [
+        set p-land-cost [base-land-cost] of myself
+        set belongs-to myself
+      ]
     ]
     [
       ifelse (pcolor = p-color)
@@ -78,7 +80,7 @@ to setup-firms
   create-firms num-firms
   ask firms [
     set wage-output round (random (wage-gap * num-firms) + 0.5)
-    set product-cost one-of [1 2 3 4]
+    set base-product-cost one-of [1 2 3 4]
 
     set label wage-output
     set label-color black
@@ -86,11 +88,11 @@ to setup-firms
     set shape "pentagon_ol"
     set size 6
 
-    while [any? firms-here or (xcor = 0 and ycor = 0)] [
-      set xcor 0 set ycor 0
-      right random 360
-      fd random ((city-radius% / 100) * (max-pxcor * 2))
-      ]
+    while [(xcor = 0 and ycor = 0)]
+    [
+      move-to one-of patches in-radius ((city-radius% / 100) * (max-pxcor * 2)) with [ not any? firms in-radius 5 ]
+      ;Radius around firms/ number of firms limits the size you are able to set the city radius
+    ]
 
     set wage-list sentence wage-list wage-output
   ]
@@ -108,9 +110,32 @@ to setup-people
   ]
 end
 
+to-report get-budget
+  report [wage-output] of firm! - commute-cost-per-patch
+end
+
+to-report get-product-cost
+  report [base-product-cost] of firm! + (commute-cost-per-patch * distance firm!)
+end
+
+to-report get-spending-on-goods
+  report ( [base-product-cost] of firm! ^ (1 / (lov - 1)) * budget) / ( [base-land-cost] of firm! ^ (lov / (lov - 1)) )
+end
+
+to-report get-spending-on-land
+  report ( [base-land-cost] of firm! ^ ((1 / (lov - 1)) * budget) ) / ( [base-product-cost] of firm! ^ (lov / (lov - 1)) )
+end
+
+to-report get-utility
+  report (( spending-on-goods ^ lov ) + ( spending-on-land ^ lov )) ^ (1 / lov)
+end
 
 
 
+
+
+
+; RANDOM UTILITIES
 
 to-report random+-
   report one-of [1 -1]
@@ -186,7 +211,7 @@ num-landlords
 num-landlords
 5
 1000
-1000.0
+398.0
 1
 1
 NIL
@@ -313,6 +338,21 @@ num-people
 1000
 100.0
 1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+24
+360
+210
+393
+commute-cost-per-patch
+commute-cost-per-patch
+0.5
+5
+0.5
+0.5
 1
 NIL
 HORIZONTAL
