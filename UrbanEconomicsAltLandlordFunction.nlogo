@@ -26,8 +26,8 @@ to setup-landlords
     [ set color (p-color - 3)]
     [ set hidden? true ]
 
-    set ID random num-landlords * 2
-    set ID  ID + 1
+    set ID who
+    set ID ID + 1
     setxy random-xcor random-ycor
     ;ask patch-here [set pcolor p-color]
     set pcolor p-color
