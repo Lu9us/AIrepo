@@ -19,6 +19,13 @@ to setup
   reset-ticks
 end
 
+to white-power
+  ask patches [
+    if (p-land-cost = 0)
+    [set pcolor white]
+  ]
+end
+
 to setup-constants
   set lov-base 0.65
 end
@@ -26,7 +33,7 @@ end
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set base-land-cost random (40 * 0.25)
+    set base-land-cost ((round random 40) + 1) * 0.25
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
@@ -34,6 +41,10 @@ to setup-landlords
     setxy random-xcor random-ycor
     ;ask patch-here [set pcolor p-color]
     set pcolor p-color
+    ask patch-here [
+      set p-land-cost [base-land-cost] of myself
+      set belongs-to myself
+    ]
     set home-x pxcor
     set home-y pycor
   ]
@@ -67,9 +78,10 @@ to setup-landlord-patches
   ]
   ask patches [
     if pcolor = black [
-      if ( all? neighbors4 [pcolor = [pcolor] of one-of neighbors4] )
+      if ( all? neighbors4 [belongs-to = [belongs-to] of one-of neighbors4 and belongs-to != 0])
       [
         set pcolor [pcolor] of one-of neighbors4
+        set p-land-cost [p-land-cost] of one-of neighbors4
         set belongs-to [belongs-to] of one-of neighbors4
       ]
     ]
@@ -133,8 +145,10 @@ to people-search
   ask people [
    let ten-random-patches n-of 10 patches
    foreach (ten-random-patches) [
-     p -> if (calculate-utility(p) < utility)
-     [ set home! p ]
+     p -> if (get-budget(p) > 0) [
+        if (calculate-utility(p) < utility)
+        [ set home! p ]
+      ]
    ]
   ]
 end
@@ -155,14 +169,14 @@ end
 ; -- BROKEN --
 
 to-report get-spending-on-goods [patch!]
-  report ( stuff-1(patch!) / stuff-2(patch!) )
+  report ( stuff1(patch!) / stuff2(patch!) )
 end
 
-to-report stuff-1 [patch!]
+to-report stuff1 [patch!]
   report ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!))
 end
 
-to-report stuff-2 [patch!]
+to-report stuff2 [patch!]
   report ( [p-land-cost] of patch! ^ (lov / (lov - 1)) )
 end
 
@@ -189,6 +203,13 @@ end
 
 
 ; RANDOM UTILITIES
+
+to-report check-val[val]
+  if(val < 0) [
+    report(0)
+  ]
+  report(val)
+end
 
 to-report random+-
   report one-of [1 -1]
@@ -264,7 +285,7 @@ num-landlords
 num-landlords
 5
 1000
-398.0
+278.0
 1
 1
 NIL
@@ -277,7 +298,7 @@ SWITCH
 217
 landlords-visible
 landlords-visible
-1
+0
 1
 -1000
 
@@ -318,7 +339,7 @@ num-firms
 num-firms
 1
 10
-4.0
+10.0
 1
 1
 NIL
@@ -424,6 +445,67 @@ delivery-cost-per-patch
 1
 NIL
 HORIZONTAL
+
+MONITOR
+1121
+192
+1333
+237
+NIL
+mean [base-land-cost] of landlords
+17
+1
+11
+
+MONITOR
+1126
+265
+1465
+310
+NIL
+mean [p-land-cost] of patches
+17
+1
+11
+
+MONITOR
+1133
+342
+1302
+387
+NIL
+min [p-land-cost] of patches
+17
+1
+11
+
+MONITOR
+1137
+132
+1331
+177
+NIL
+min [base-land-cost] of landlords
+17
+1
+11
+
+BUTTON
+1113
+516
+1214
+549
+NIL
+white-power
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
