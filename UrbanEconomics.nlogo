@@ -1,15 +1,17 @@
-globals [num-people num-firms wage-min wage-max wage-gap]
+globals [lov-base wage-min wage-max wage-list]
 
 breed [people person]
 breed [landlords landlord]
 breed [firms firm]
 
-people-own [firm! land-cost lov budget spending-on-land spending-on-goods utility income]
+people-own [firm! home! land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
-firms-own [wage-output product-cost]
+firms-own [wage-output base-product-cost]
+patches-own [p-land-cost belongs-to]
 
 to setup
   clear-all
+  setup-constants
   ask patches [set pcolor black]
   setup-landlords
   setup-firms
@@ -17,10 +19,15 @@ to setup
   reset-ticks
 end
 
+to setup-constants
+  set lov-base 0.65
+end
+
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [2 3 4 5 6 7 8 9] )
+    set base-land-cost random (40 * 0.25)
+    set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
     [ set hidden? true ]
@@ -45,33 +52,158 @@ to setup-landlord-patches
     right one-of [ 0 90 180 270 ]
     fd 1
     ifelse (pcolor = black)
-    [ set pcolor p-color ]
+    [
+      set pcolor p-color
+      ask patch-here [
+        set p-land-cost [base-land-cost] of myself
+        set belongs-to myself
+      ]
+    ]
     [
       ifelse (pcolor = p-color)
       [  ] ;do nothing
       [ right 180 fd 1 ]
     ]
   ]
+  ask patches [
+    if pcolor = black [
+      if ( all? neighbors4 [pcolor = [pcolor] of one-of neighbors4] )
+      [
+        set pcolor [pcolor] of one-of neighbors4
+        set belongs-to [belongs-to] of one-of neighbors4
+      ]
+    ]
+  ]
 end
 
 to setup-firms
+  create-firms num-firms
+  ask firms [
+    set wage-output round (random (wage-gap * num-firms) + 0.5)
+    set base-product-cost one-of [1 2 3 4]
 
+    set label wage-output
+    set label-color black
+    set color (wage-output + 2)
+    set shape "pentagon_ol"
+    set size 6
+
+    while [(xcor = 0 and ycor = 0)]
+    [
+      move-to one-of patches in-radius ((city-radius% / 100) * (max-pxcor * 2)) with [ not any? firms in-radius 5 ]
+      ;Radius around firms/ number of firms limits the size you are able to set the city radius
+    ]
+
+    set wage-list sentence wage-list wage-output
+  ]
 end
 
 to setup-people
+  create-people num-people
+  ask people [
+    set firm! one-of firms
+    set lov ( lov-base + random (lov-range * random+-) )
 
+    set color white
+    set shape "person"
+    setxy random-xcor random-ycor
+  ]
+end
+
+; GO
+
+to go
+  people-set-attributes
+  people-search
+  tick
+end
+
+to people-set-attributes
+  ask people [
+   set home! patch-here
+   set budget get-budget (home!)
+   set product-cost get-product-cost (home!)
+   set spending-on-goods get-spending-on-goods (home!)
+   set spending-on-land get-spending-on-land (home!)
+   set utility calculate-utility (home!)
+  ]
+end
+
+to people-search
+  ask people [
+   let ten-random-patches n-of 10 patches
+   foreach (ten-random-patches) [
+     p -> if (calculate-utility(p) < utility)
+     [ set home! p ]
+   ]
+  ]
+end
+
+to-report get-budget [patch!]
+  report [wage-output] of firm! - (commute-cost-per-patch * pythagoras-bitch(patch!))
+end
+
+to-report get-product-cost [patch!]
+  report [base-product-cost] of firm! + (delivery-cost-per-patch * pythagoras-bitch(patch!))
+end
+
+to-report get-spending-on-goodsfsadsdgf [patch!]
+  report ( ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!)) / ( [p-land-cost] of patch! ^ (lov / (lov - 1)) ))
+end
+
+
+; -- BROKEN --
+
+to-report get-spending-on-goods [patch!]
+  report ( stuff-1(patch!) / stuff-2(patch!) )
+end
+
+to-report stuff-1 [patch!]
+  report ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!))
+end
+
+to-report stuff-2 [patch!]
+  report ( [p-land-cost] of patch! ^ (lov / (lov - 1)) )
+end
+
+; -- BROKEN --
+
+to-report get-spending-on-land [patch!]
+  report ( [p-land-cost] of patch! ^ ((1 / (lov - 1)) * get-budget(patch!)) ) / ( get-product-cost(patch!) ^ (lov / (lov - 1)) )
+end
+
+to-report get-utility
+  report (( spending-on-goods ^ lov ) + ( spending-on-land ^ lov )) ^ (1 / lov)
+end
+
+to-report calculate-utility [patch!]
+  report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov)
+end
+
+to-report pythagoras-bitch [patch!]
+  report sqrt ((distance patch!)^(2) + (distance firm!)^(2))
+end
+
+
+
+
+
+; RANDOM UTILITIES
+
+to-report random+-
+  report one-of [1 -1]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-234
+239
 10
-1050
+1055
 827
 -1
 -1
 8.0
 1
-10
+20
 1
 1
 1
@@ -87,7 +219,7 @@ GRAPHICS-WINDOW
 0
 1
 ticks
-30.0
+60.0
 
 BUTTON
 19
@@ -116,7 +248,7 @@ go
 T
 1
 T
-TURTLE
+OBSERVER
 NIL
 NIL
 NIL
@@ -132,7 +264,7 @@ num-landlords
 num-landlords
 5
 1000
-100.0
+398.0
 1
 1
 NIL
@@ -145,15 +277,15 @@ SWITCH
 217
 landlords-visible
 landlords-visible
-0
+1
 1
 -1000
 
 BUTTON
-35
-356
-98
-389
+74
+767
+137
+800
 NIL
 stop
 NIL
@@ -167,15 +299,131 @@ NIL
 1
 
 SWITCH
-8
-430
-211
-463
+1089
+14
+1292
+47
 bidded-land-costs-percede
 bidded-land-costs-percede
 1
 1
 -1000
+
+SLIDER
+20
+277
+192
+310
+num-firms
+num-firms
+1
+10
+4.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+21
+319
+193
+352
+wage-gap
+wage-gap
+1
+3
+2.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+21
+639
+191
+684
+NIL
+wage-list
+17
+1
+11
+
+SLIDER
+15
+703
+187
+736
+city-radius%
+city-radius%
+5
+50
+25.0
+1
+1
+%
+HORIZONTAL
+
+SLIDER
+17
+534
+189
+567
+lov-range
+lov-range
+0
+12.5
+0.5
+0.5
+1
+NIL
+HORIZONTAL
+
+SLIDER
+26
+441
+198
+474
+num-people
+num-people
+5
+1000
+100.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+24
+360
+210
+393
+commute-cost-per-patch
+commute-cost-per-patch
+0.5
+5
+0.5
+0.5
+1
+NIL
+HORIZONTAL
+
+SLIDER
+26
+406
+218
+439
+delivery-cost-per-patch
+delivery-cost-per-patch
+0.25
+10
+0.25
+0.25
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -384,6 +632,13 @@ pentagon
 false
 0
 Polygon -7500403 true true 150 15 15 120 60 285 240 285 285 120
+
+pentagon_ol
+false
+0
+Polygon -1 true false 150 15 15 120 60 285 240 285 285 120
+Polygon -7500403 true true 150 36 30 124 71 270 230 271 270 124
+Polygon -7500403 true true 15 120
 
 person
 false
