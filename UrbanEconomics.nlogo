@@ -1,4 +1,4 @@
-globals [lov-base wage-min wage-max wage-list]
+globals [wage-min wage-max wage-list    amount-people-moved]
 
 breed [people person]
 breed [landlords landlord]
@@ -10,8 +10,8 @@ firms-own [wage-output base-product-cost]
 patches-own [p-land-cost belongs-to]
 
 to setup
+  set amount-people-moved 0
   clear-all
-  setup-constants
   ask patches [set pcolor black]
   setup-landlords
   setup-firms
@@ -19,21 +19,11 @@ to setup
   reset-ticks
 end
 
-to white-power
-  ask patches [
-    if (p-land-cost = 0)
-    [set pcolor white]
-  ]
-end
-
-to setup-constants
-  set lov-base 0.65
-end
 
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set base-land-cost ((round random 80) + 1) * 0.25
+    set base-land-cost ((round random 40) + 1) * 0.25
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
@@ -48,10 +38,16 @@ to setup-landlords
     set home-x pxcor
     set home-y pycor
   ]
-  while [any? patches with [pcolor = black]]
-  [
-    setup-landlord-patches
+  while [any? patches with [pcolor = black]] [
+    let patches-count count patches
+    let patches-assigned count patches with [pcolor != black]
+    let assigned% (patches-assigned / patches-count * 100)
+
+    ifelse (assigned% < p-tipping-point)
+    [ setup-landlord-patches ]
+    [ setup-cellular-landlord-patches ]
   ]
+
   ask landlords [
    setxy home-x home-y
   ]
@@ -88,22 +84,36 @@ to setup-landlord-patches
   ]
 end
 
+to setup-cellular-landlord-patches
+  ask patches with [pcolor = black] [
+    let clone-patch one-of neighbors4 with [pcolor != black]
+    if(clone-patch != nobody) [
+     set p-land-cost [p-land-cost] of clone-patch
+     set belongs-to [belongs-to] of clone-patch
+     set pcolor [pcolor] of clone-patch
+    ]
+  ]
+end
+
 to setup-firms
   create-firms num-firms
   ask firms [
     set wage-output round (random (wage-gap * num-firms) + 0.5)
-    set base-product-cost one-of [1 2 3 4]
+
+    ifelse (num-firms = 1)
+    [ set base-product-cost 1 ]
+    [ set base-product-cost one-of [1 2 3 4] ]
 
     set label wage-output
     set label-color black
-    set color (wage-output + 2)
+    set color color;(wage-output + 2)
     set shape "pentagon_ol"
     set size 6
 
     while [(xcor = 0 and ycor = 0)]
     [
+      ; radius around firms/ number of firms limits the size you are able to set the city radius
       move-to one-of patches in-radius ((city-radius% / 100) * (max-pxcor * 2)) with [ not any? firms in-radius 5 ]
-      ;Radius around firms/ number of firms limits the size you are able to set the city radius
     ]
 
     set wage-list sentence wage-list wage-output
@@ -114,8 +124,10 @@ to setup-people
   create-people num-people
   ask people [
     set firm! one-of firms
-    set lov ( lov-base + random (lov-range * random+-) )
+    set lov ( lov-median + random (lov-range * random+-) )
 
+    set label [wage-output] of firm!
+    set label-color [color] of firm!
     set color [color] of firm!
     set shape "person"
     setxy random-xcor random-ycor
@@ -152,25 +164,16 @@ to people-search
       if (p-utility >= 0) [
         if (p-utility < utility) [
           set selected-patch item i ten-random-patches
-          move-to selected-patch
-          set color green
-          show "moved to "
-          show i
         ]
       ]
       set i (i + 1)
     ]
-
-
-
-
-  ; ask ten-random-patches [
-  ;      let p-utility (calculate-utility(myself))
-  ;      if (p-utility >= 0) [
-  ;        if (p-utility < utility)
-  ;        [ set selected-patch myself ]
-  ;      ]
-  ; ]
+    if (selected-patch != 0) [
+      move-to selected-patch
+      ;show "moved to "
+      ;show selected-patch
+      set amount-people-moved (amount-people-moved + 1)
+    ]
   ]
 end
 
@@ -179,7 +182,7 @@ to-report get-budget [patch!]
 end
 
 to-report get-product-cost [patch!]
-  report [base-product-cost] of firm! + (delivery-cost-per-patch); * calculate-patch-firm-distance-pythagoras(patch!))
+  report [base-product-cost] of firm! + (delivery-cost-per-patch) ;* calculate-patch-firm-distance-pythagoras(patch!))
 end
 
 to-report get-spending-on-goods [patch!]
@@ -214,12 +217,10 @@ end
 to-report calculate-utility [patch!]
   ifelse (get-budget(patch!) <= 0)
   [ report -1]
-  [ show (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov)
-    report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
+  [ report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
 end
 
 to-report calculate-patch-firm-distance-pythagoras [patch!]
- ; show sqrt ((distance patch!)^(2) + (distance firm!)^(2))
   report sqrt ((distance patch!)^(2) + (distance firm!)^(2))
 end
 
@@ -320,7 +321,7 @@ num-landlords
 num-landlords
 5
 1000
-56.0
+239.0
 1
 1
 NIL
@@ -333,26 +334,9 @@ SWITCH
 217
 landlords-visible
 landlords-visible
-0
+1
 1
 -1000
-
-BUTTON
-74
-767
-137
-800
-NIL
-stop
-NIL
-1
-T
-PATCH
-NIL
-NIL
-NIL
-NIL
-1
 
 SWITCH
 1089
@@ -389,7 +373,7 @@ wage-gap
 wage-gap
 1
 3
-1.0
+3.0
 1
 1
 NIL
@@ -429,9 +413,9 @@ SLIDER
 lov-range
 lov-range
 0
-12.5
-0.5
-0.5
+0.25
+0.1
+0.1
 1
 NIL
 HORIZONTAL
@@ -458,9 +442,9 @@ SLIDER
 393
 commute-cost-per-patch
 commute-cost-per-patch
-0.01
+0.00
 0.5
-0.21
+0.0
 0.1
 1
 NIL
@@ -475,7 +459,7 @@ delivery-cost-per-patch
 delivery-cost-per-patch
 0.05
 1
-0.2
+0.25
 0.05
 1
 NIL
@@ -559,7 +543,7 @@ BUTTON
 1397
 612
 NIL
-ask patches [set pcolor (p-land-cost + 10)]
+ask patches [set pcolor (p-land-cost + 9)]
 NIL
 1
 T
@@ -598,6 +582,69 @@ false
 "" ""
 PENS
 "default" 1.0 0 -16777216 true "" "plot mean [utility] of people"
+
+MONITOR
+1283
+422
+1417
+467
+NIL
+max [utility] of people
+17
+1
+11
+
+MONITOR
+1316
+481
+1445
+526
+NIL
+min [utility] of people
+17
+1
+11
+
+SLIDER
+16
+492
+188
+525
+lov-median
+lov-median
+0.1
+1
+0.9
+0.05
+1
+NIL
+HORIZONTAL
+
+MONITOR
+1161
+61
+1449
+106
+NIL
+amount-people-moved
+17
+1
+11
+
+SLIDER
+17
+772
+189
+805
+p-tipping-point
+p-tipping-point
+0
+100
+0.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
