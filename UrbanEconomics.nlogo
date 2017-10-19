@@ -4,7 +4,7 @@ breed [people person]
 breed [landlords landlord]
 breed [firms firm]
 
-people-own [firm! home! land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
+people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
 patches-own [p-land-cost belongs-to]
@@ -33,7 +33,7 @@ end
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set base-land-cost ((round random 40) + 1) * 0.25
+    set base-land-cost ((round random 80) + 1) * 0.25
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
@@ -116,7 +116,7 @@ to setup-people
     set firm! one-of firms
     set lov ( lov-base + random (lov-range * random+-) )
 
-    set color white
+    set color [color] of firm!
     set shape "person"
     setxy random-xcor random-ycor
   ]
@@ -133,42 +133,63 @@ end
 to people-set-attributes
   ask people [
    set home! patch-here
-   set budget get-budget (home!)
-   set product-cost get-product-cost (home!)
-   set spending-on-goods get-spending-on-goods (home!)
-   set spending-on-land get-spending-on-land (home!)
-   set utility calculate-utility (home!)
+   set budget get-budget(home!)
+   set product-cost get-product-cost(home!)
+   set spending-on-goods get-spending-on-goods(home!)
+   set spending-on-land get-spending-on-land(home!)
+   set utility calculate-utility(home!)
   ]
 end
 
 to people-search
   ask people [
-   let ten-random-patches n-of 10 patches
-   foreach (ten-random-patches) [
-     p -> if (get-budget(p) > 0) [
-        if (calculate-utility(p) < utility)
-        [ set home! p ]
+    let ten-random-patches []
+    ask n-of 10 patches [set ten-random-patches lput self ten-random-patches]
+
+    let i 0
+    while [ i < length ten-random-patches] [
+      let p-utility calculate-utility(item i ten-random-patches)
+      if (p-utility >= 0) [
+        if (p-utility < utility) [
+          set selected-patch item i ten-random-patches
+          move-to selected-patch
+          set color green
+          show "moved to "
+          show i
+        ]
       ]
-   ]
+      set i (i + 1)
+    ]
+
+
+
+
+  ; ask ten-random-patches [
+  ;      let p-utility (calculate-utility(myself))
+  ;      if (p-utility >= 0) [
+  ;        if (p-utility < utility)
+  ;        [ set selected-patch myself ]
+  ;      ]
+  ; ]
   ]
 end
 
 to-report get-budget [patch!]
-  report [wage-output] of firm! - (commute-cost-per-patch * pythagoras-bitch(patch!))
+  report [wage-output] of firm! - (commute-cost-per-patch * calculate-patch-firm-distance-pythagoras(patch!))
 end
 
 to-report get-product-cost [patch!]
-  report [base-product-cost] of firm! + (delivery-cost-per-patch * pythagoras-bitch(patch!))
+  report [base-product-cost] of firm! + (delivery-cost-per-patch); * calculate-patch-firm-distance-pythagoras(patch!))
 end
 
-to-report get-spending-on-goodsfsadsdgf [patch!]
+to-report get-spending-on-goods [patch!]
   report ( ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!)) / ( [p-land-cost] of patch! ^ (lov / (lov - 1)) ))
 end
 
 
 ; -- BROKEN --
 
-to-report get-spending-on-goods [patch!]
+to-report get-spending-on-goods2 [patch!]
   report ( stuff1(patch!) / stuff2(patch!) )
 end
 
@@ -191,10 +212,14 @@ to-report get-utility
 end
 
 to-report calculate-utility [patch!]
-  report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov)
+  ifelse (get-budget(patch!) <= 0)
+  [ report -1]
+  [ show (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov)
+    report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
 end
 
-to-report pythagoras-bitch [patch!]
+to-report calculate-patch-firm-distance-pythagoras [patch!]
+ ; show sqrt ((distance patch!)^(2) + (distance firm!)^(2))
   report sqrt ((distance patch!)^(2) + (distance firm!)^(2))
 end
 
@@ -213,6 +238,16 @@ end
 
 to-report random+-
   report one-of [1 -1]
+end
+
+to help-people-search
+;  let available-destinations patches
+;  ;random 10 patches
+;  ;patches with >0 people choosing
+;  turtles with [ member? matching-patches
+;  ;list of turtles on this patch
+;
+;
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -285,7 +320,7 @@ num-landlords
 num-landlords
 5
 1000
-278.0
+56.0
 1
 1
 NIL
@@ -339,7 +374,7 @@ num-firms
 num-firms
 1
 10
-10.0
+1.0
 1
 1
 NIL
@@ -354,7 +389,7 @@ wage-gap
 wage-gap
 1
 3
-2.0
+1.0
 1
 1
 NIL
@@ -410,7 +445,7 @@ num-people
 num-people
 5
 1000
-100.0
+1000.0
 1
 1
 NIL
@@ -423,10 +458,10 @@ SLIDER
 393
 commute-cost-per-patch
 commute-cost-per-patch
+0.01
 0.5
-5
-0.5
-0.5
+0.21
+0.1
 1
 NIL
 HORIZONTAL
@@ -438,10 +473,10 @@ SLIDER
 439
 delivery-cost-per-patch
 delivery-cost-per-patch
-0.25
-10
-0.25
-0.25
+0.05
+1
+0.2
+0.05
 1
 NIL
 HORIZONTAL
@@ -493,10 +528,10 @@ min [base-land-cost] of landlords
 BUTTON
 1113
 516
-1214
+1313
 549
 NIL
-white-power
+ask people [set color white]
 NIL
 1
 T
@@ -506,6 +541,63 @@ NIL
 NIL
 NIL
 1
+
+MONITOR
+1119
+407
+1260
+452
+NIL
+mean [utility] of people
+17
+1
+11
+
+BUTTON
+1124
+579
+1397
+612
+NIL
+ask patches [set pcolor (p-land-cost + 10)]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1338
+355
+1508
+400
+NIL
+max[p-land-cost] of patches
+17
+1
+11
+
+PLOT
+1070
+635
+1454
+827
+utility
+ticks
+utility
+0.0
+10000.0
+0.0
+100.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot mean [utility] of people"
 
 @#$#@#$#@
 ## WHAT IS IT?
