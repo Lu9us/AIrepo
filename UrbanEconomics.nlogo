@@ -1,4 +1,10 @@
-globals [wage-min wage-max wage-list    amount-people-moved]
+; TODO
+; - work out a balancing equation between the spending-on-land and spending-on-goods in the utility function, think of it like a see-saw
+; - study emergence through parameters
+
+
+
+globals [wage-min wage-max wage-list    amount-people-moved perc-best-homed-people]
 
 breed [people person]
 breed [landlords landlord]
@@ -105,7 +111,7 @@ to setup-firms
     [ set base-product-cost one-of [1 2 3 4] ]
 
     set label wage-output
-    set label-color black
+    set label-color white
     set color color;(wage-output + 2)
     set shape "pentagon_ol"
     set size 6
@@ -156,7 +162,7 @@ end
 to people-search
   ask people [
     let ten-random-patches []
-    ask n-of 10 patches [set ten-random-patches lput self ten-random-patches]
+    ask n-of 10 patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
 
     let i 0
     while [ i < length ten-random-patches] [
@@ -170,8 +176,6 @@ to people-search
     ]
     if (selected-patch != 0) [
       move-to selected-patch
-      ;show "moved to "
-      ;show selected-patch
       set amount-people-moved (amount-people-moved + 1)
     ]
   ]
@@ -182,7 +186,7 @@ to-report get-budget [patch!]
 end
 
 to-report get-product-cost [patch!]
-  report [base-product-cost] of firm! + (delivery-cost-per-patch) ;* calculate-patch-firm-distance-pythagoras(patch!))
+  report [base-product-cost] of firm! + ((delivery-cost-per-patch)); * calculate-patch-firm-distance-pythagoras(patch!))
 end
 
 to-report get-spending-on-goods [patch!]
@@ -239,6 +243,27 @@ end
 
 to-report random+-
   report one-of [1 -1]
+end
+
+to percentage-of-best-homed-people
+  set perc-best-homed-people 0
+  let num 0
+  ask people [
+    let best-utility 999
+    let all-patches []
+
+    ask n-of (count patches) patches [set all-patches lput self all-patches]
+    let i 0
+    while [ i < length all-patches] [
+      let temp-util calculate-utility (item i all-patches)
+      if (temp-util < best-utility)
+      [ set best-utility temp-util ]
+      set i (i + 1)
+    ]
+    if (best-utility = utility and best-utility != 999)
+    [ set num (num + 1) ]
+  ]
+  set perc-best-homed-people num
 end
 
 to help-people-search
@@ -321,7 +346,7 @@ num-landlords
 num-landlords
 5
 1000
-239.0
+5.0
 1
 1
 NIL
@@ -414,8 +439,8 @@ lov-range
 lov-range
 0
 0.25
-0.1
-0.1
+0.05
+0.05
 1
 NIL
 HORIZONTAL
@@ -444,8 +469,8 @@ commute-cost-per-patch
 commute-cost-per-patch
 0.00
 0.5
-0.0
 0.1
+0.05
 1
 NIL
 HORIZONTAL
@@ -570,18 +595,19 @@ PLOT
 635
 1454
 827
-utility
+best-homed-people
 ticks
-utility
+perc best homed
 0.0
-10000.0
+1100.0
 0.0
-100.0
+1000.0
 true
 false
-"" ""
+"plotxy ticks perc-best-homed-people" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [utility] of people"
+"pen-best" 1.0 0 -2139308 true "" "plot perc-best-homed-people"
+"pen-ppl" 1.0 0 -16777216 true "" "plot count people"
 
 MONITOR
 1283
@@ -614,7 +640,7 @@ lov-median
 lov-median
 0.1
 1
-0.9
+0.65
 0.05
 1
 NIL
@@ -640,11 +666,67 @@ p-tipping-point
 p-tipping-point
 0
 100
-0.0
+20.0
 1
 1
 NIL
 HORIZONTAL
+
+BUTTON
+1487
+559
+1713
+592
+NIL
+ask people [set label \"\"]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1542
+264
+1746
+309
+NIL
+percentage-of-best-homed-people
+17
+1
+11
+
+MONITOR
+1514
+709
+1663
+754
+NIL
+perc-best-homed-people
+17
+1
+11
+
+BUTTON
+1509
+654
+1732
+687
+NIL
+percentage-of-best-homed-people
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
