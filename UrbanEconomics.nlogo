@@ -124,7 +124,7 @@ to setup-people
   create-people num-people
   ask people [
     set firm! one-of firms
-    set lov ( lov-median + random (lov-range * random+-) )
+    set lov ( lov-median + random (lov-range * random+-) ) + 0.1
 
     set label [wage-output] of firm!
     set label-color [color] of firm!
@@ -139,6 +139,7 @@ end
 to go
   people-set-attributes
   people-search
+  LandLord-cost-adjust
   tick
 end
 
@@ -152,6 +153,49 @@ to people-set-attributes
    set utility calculate-utility(home!)
   ]
 end
+
+to LandLord-cost-adjust
+  ask landlords
+  [
+        let ll self
+    let price-change 0
+    let stock count patches with [belongs-to = self]
+    let used-stock 0
+    let stock-change 0
+    ask patches with [belongs-to = ll]
+    [
+
+    if(any? people-on self)
+      [
+      set used-stock used-stock + 1
+
+      ]
+    ]
+    ;show("used-stock")
+    ;show(used-stock)
+    ;show(net-stock-level)
+    set stock-change  used-stock - net-stock-level
+    ;show("stock-change")
+    ;show(stock-change)
+    set net-stock-level used-stock
+
+    set price-change stock-change / land-lord-cost-multiplier
+    ;show(price-change)
+    set base-land-cost base-land-cost + price-change
+   ;; show("blc")
+   ;; show(ll)
+   ; show(base-land-cost)
+
+
+    ask patches with [belongs-to = ll]
+    [
+      set p-land-cost [base-land-cost] of ll
+    ]
+
+  ]
+ask patches [set pcolor (p-land-cost + 9)]
+end
+
 
 to people-search
   ask people [
@@ -280,9 +324,9 @@ ticks
 
 BUTTON
 19
-36
+35
 82
-69
+68
 NIL
 setup\n
 NIL
@@ -459,7 +503,7 @@ delivery-cost-per-patch
 delivery-cost-per-patch
 0.05
 1
-0.25
+0.65
 0.05
 1
 NIL
@@ -614,7 +658,7 @@ lov-median
 lov-median
 0.1
 1
-0.9
+1.0
 0.05
 1
 NIL
@@ -645,6 +689,39 @@ p-tipping-point
 1
 NIL
 HORIZONTAL
+
+SLIDER
+16
+234
+195
+267
+land-lord-cost-multiplier
+land-lord-cost-multiplier
+0.01
+10
+10.0
+0.01
+1
+NIL
+HORIZONTAL
+
+PLOT
+1064
+123
+1264
+273
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"pen-0" 1.0 0 -7500403 true "" "plot mean [p-land-cost] of patches"
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -995,7 +1072,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.1
+NetLogo 6.0.2
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
