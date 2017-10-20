@@ -11,4 +11,7 @@ https://tinyurl.com/yas3hcsd
 
 
 bid papers
+Reference this for benefits of sealed bids
 http://www.sciencedirect.com/science/article/pii/S0030401809006683
+and this one for how to do it in theory
+http://www.sciencedirect.com/science/article/pii/S0895717705001573
