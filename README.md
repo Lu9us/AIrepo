@@ -11,5 +11,4 @@ https://tinyurl.com/yas3hcsd
 
 
 bid papers
-http://www.sciencedirect.com/science/article/pii/S0167718708000672
-https://www.ijcai.org/Proceedings/07/Papers/195.pdf
+http://www.sciencedirect.com/science/article/pii/S0030401809006683
