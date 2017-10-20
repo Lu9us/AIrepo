@@ -137,9 +137,10 @@ end
 ; GO
 
 to go
+    LandLord-cost-adjust
   people-set-attributes
   people-search
-  LandLord-cost-adjust
+
   tick
 end
 
@@ -157,36 +158,40 @@ end
 to LandLord-cost-adjust
   ask landlords
   [
-        let ll self
+
+    ; get refrence to current land lord for use later
+    let ll self
+    ; allocate temp varibles
     let price-change 0
-    let stock count patches with [belongs-to = self]
+    let stock count patches with [belongs-to = ll]
     let used-stock 0
-    let stock-change 0
+    ;count number of patches with people on
     ask patches with [belongs-to = ll]
     [
-
     if(any? people-on self)
       [
-      set used-stock used-stock + 1
-
+      set used-stock used-stock + count people-on self
       ]
     ]
-    ;show("used-stock")
-    ;show(used-stock)
-    ;show(net-stock-level)
-    set stock-change  used-stock - net-stock-level
-    ;show("stock-change")
-    ;show(stock-change)
-    set net-stock-level used-stock
 
-    set price-change stock-change / land-lord-cost-multiplier
-    ;show(price-change)
+    ;show("used-stock")
+    ;pecentege of the stock before land lord starts lowering prices
+    ;should be 100 but we never get stock use that high
+    let stock-balance (stock / 100) * land-lord-stock-balance
+    ;calc stock avalible
+    set net-stock-level  stock - used-stock
+    ; if the stocked avalible is more than the target start reducing prices
+    set price-change  ((stock-balance - net-stock-level ) ) / land-lord-cost-multiplier
+    ;set price
     set base-land-cost base-land-cost + price-change
-   ;; show("blc")
+
+   ; min stock value
+    if(base-land-cost < 1 )
+    [set base-land-cost  1]
    ;; show(ll)
    ; show(base-land-cost)
 
-
+    ; assign new value to patches
     ask patches with [belongs-to = ll]
     [
       set p-land-cost [base-land-cost] of ll
@@ -251,6 +256,7 @@ end
 ; -- BROKEN --
 
 to-report get-spending-on-land [patch!]
+
   report ( [p-land-cost] of patch! ^ ((1 / (lov - 1)) * get-budget(patch!)) ) / ( get-product-cost(patch!) ^ (lov / (lov - 1)) )
 end
 
@@ -365,7 +371,7 @@ num-landlords
 num-landlords
 5
 1000
-239.0
+208.0
 1
 1
 NIL
@@ -378,7 +384,7 @@ SWITCH
 217
 landlords-visible
 landlords-visible
-1
+0
 1
 -1000
 
@@ -402,7 +408,7 @@ num-firms
 num-firms
 1
 10
-1.0
+4.0
 1
 1
 NIL
@@ -417,7 +423,7 @@ wage-gap
 wage-gap
 1
 3
-3.0
+2.0
 1
 1
 NIL
@@ -443,7 +449,7 @@ city-radius%
 city-radius%
 5
 50
-25.0
+36.0
 1
 1
 %
@@ -458,7 +464,7 @@ lov-range
 lov-range
 0
 0.25
-0.1
+0.2
 0.1
 1
 NIL
@@ -473,7 +479,7 @@ num-people
 num-people
 5
 1000
-1000.0
+997.0
 1
 1
 NIL
@@ -503,7 +509,7 @@ delivery-cost-per-patch
 delivery-cost-per-patch
 0.05
 1
-0.65
+0.3
 0.05
 1
 NIL
@@ -658,7 +664,7 @@ lov-median
 lov-median
 0.1
 1
-1.0
+0.5
 0.05
 1
 NIL
@@ -693,14 +699,14 @@ HORIZONTAL
 SLIDER
 16
 234
-195
+206
 267
 land-lord-cost-multiplier
 land-lord-cost-multiplier
-0.01
-10
-10.0
-0.01
+0.5
+100
+14.5
+1
 1
 NIL
 HORIZONTAL
@@ -722,6 +728,21 @@ false
 "" ""
 PENS
 "pen-0" 1.0 0 -7500403 true "" "plot mean [p-land-cost] of patches"
+
+SLIDER
+16
+79
+195
+112
+land-lord-stock-balance
+land-lord-stock-balance
+0
+100
+60.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
