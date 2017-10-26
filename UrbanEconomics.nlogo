@@ -23,7 +23,7 @@ end
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set base-land-cost ((round random 40) + 1) * 0.25
+    set base-land-cost ((round random 4) + 1) * 0.25
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
@@ -156,8 +156,10 @@ to people-set-attributes
 end
 
 to LandLord-cost-adjust
-  ask landlords
+
+  ask-concurrent landlords
   [
+
 
     ; get refrence to current land lord for use later
     let ll self
@@ -174,14 +176,35 @@ to LandLord-cost-adjust
       ]
     ]
 
+
     ;show("used-stock")
     ;pecentege of the stock before land lord starts lowering prices
     ;should be 100 but we never get stock use that high
     let stock-balance (stock / 100) * land-lord-stock-balance
     ;calc stock avalible
     set net-stock-level  stock - used-stock
-    ; if the stocked avalible is more than the target start reducing prices
+
+    if-else(auto-landlord-stock)
+    [
+     let c-landlord count landlords
+
+     let c-people count people
+
+     let avg (c-people / c-landlord)
+
+      if-else(used-stock > avg)
+      [
+      set price-change  1
+
+      ]
+      [
+       set price-change  -1
+      ]
+    ]
+    [
+         ; if the stocked avalible is more than the target start reducing prices
     set price-change  ((stock-balance - net-stock-level ) ) / land-lord-cost-multiplier
+    ]
     ;set price
     set base-land-cost base-land-cost + price-change
 
@@ -199,6 +222,7 @@ to LandLord-cost-adjust
 
   ]
 ask patches [set pcolor (p-land-cost + 9)]
+
 end
 
 
@@ -222,8 +246,7 @@ to people-search
       ;show "moved to "
       ;show selected-patch
       set amount-people-moved (amount-people-moved + 1)
-    ]
-  ]
+  ]]
 end
 
 to-report get-budget [patch!]
@@ -371,7 +394,7 @@ num-landlords
 num-landlords
 5
 1000
-208.0
+278.0
 1
 1
 NIL
@@ -423,7 +446,7 @@ wage-gap
 wage-gap
 1
 3
-2.0
+1.0
 1
 1
 NIL
@@ -464,7 +487,7 @@ lov-range
 lov-range
 0
 0.25
-0.2
+0.1
 0.1
 1
 NIL
@@ -479,7 +502,7 @@ num-people
 num-people
 5
 1000
-997.0
+1000.0
 1
 1
 NIL
@@ -509,7 +532,7 @@ delivery-cost-per-patch
 delivery-cost-per-patch
 0.05
 1
-0.3
+1.0
 0.05
 1
 NIL
@@ -593,7 +616,7 @@ BUTTON
 1397
 612
 NIL
-ask patches [set pcolor (p-land-cost + 9)]
+ask patches [set pcolor (p-land-cost + 10)]
 NIL
 1
 T
@@ -664,7 +687,7 @@ lov-median
 lov-median
 0.1
 1
-0.5
+0.6
 0.05
 1
 NIL
@@ -690,7 +713,7 @@ p-tipping-point
 p-tipping-point
 0
 100
-0.0
+33.0
 1
 1
 NIL
@@ -712,10 +735,10 @@ NIL
 HORIZONTAL
 
 PLOT
-1064
-123
-1264
-273
+1468
+61
+1668
+211
 plot 1
 NIL
 NIL
@@ -738,11 +761,22 @@ land-lord-stock-balance
 land-lord-stock-balance
 0
 100
-60.0
+51.0
 1
 1
 NIL
 HORIZONTAL
+
+SWITCH
+18
+588
+185
+621
+auto-landlord-stock
+auto-landlord-stock
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1093,7 +1127,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.2
+NetLogo 6.0.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
