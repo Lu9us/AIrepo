@@ -243,50 +243,6 @@ to landLord-cost-adjust
   ask patches [set pcolor (p-land-cost + 10)]
 end
 
-to landlord-cost-adjust2
-  ask landlords [
-    ; allocate temp variables
-    let stock ( count patches with [belongs-to = myself] )
-    ;show "stock"
-    ;show stock
-    let used-stock 0
-
-    ; count number of patches with people on
-    ask patches with [belongs-to = myself] [
-       if(any? people-on myself) [
-         set used-stock (used-stock + 1)
-       ]
-    ]
-
-    ;show("used-stock")
-    ;percentage of the stock before landlord starts lowering prices
-    ;should be 100 but we never get stock use that high
-    let stock-balance ( stock * (landlord-stock-balance / 100) )
-    ;show "stock-balance"
-    ;show stock-balance
-    ;calc stock available
-    set net-stock-level ( stock - used-stock )
-    ;show "net-stock-level"
-    ;show net-stock-level
-    ; if the stocked avalible is more than the target start reducing prices
-    let price-change  ( (stock-balance - net-stock-level ) / landlord-cost-multiplier )
-    ;set price
-    set base-land-cost base-land-cost + price-change
-
-   ; min stock value
-    if(base-land-cost < 1 )
-    [set base-land-cost  1]
-   ;; show(ll)
-   ; show(base-land-cost)
-
-    ; assign new value to patches
-    ask patches with [belongs-to = myself] [
-      set p-land-cost [base-land-cost] of myself
-    ]
-  ]
-  ask patches [ set pcolor (p-land-cost + 9) ]
-end
-
 to-report get-budget [patch!]
   report ( [wage-output] of firm! - (commute-cost-per-patch) * calculate-patch-firm-distance(patch!) )
 end
