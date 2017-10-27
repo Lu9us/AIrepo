@@ -2,9 +2,9 @@
 ; - work out a balancing equation between the spending-on-land and spending-on-goods in the utility function, think of it like a see-saw
 ; - study emergence through parameters
 
+extensions [table]
 
-
-globals [wage-min wage-max wage-list    amount-people-moved perc-best-homed-people]
+globals [wage-min wage-max wage-list    amount-people-moved perc-best-homed-people dif-between-g-and-l]
 
 breed [people person]
 breed [landlords landlord]
@@ -29,7 +29,7 @@ end
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set base-land-cost ((round random 40) + 1) * 0.25
+    set base-land-cost ((round random 4) + 1) * 0.25
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
@@ -143,8 +143,12 @@ end
 ; GO
 
 to go
+  landlord-cost-adjust
   people-set-attributes
   people-search
+  show dif-between-g-and-l / num-people
+  set dif-between-g-and-l 0
+
   tick
 end
 
@@ -162,14 +166,16 @@ end
 to people-search
   ask people [
     let ten-random-patches []
-    ask n-of 10 patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
+    ask n-of 10 other patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
 
     let i 0
     while [ i < length ten-random-patches] [
       let p-utility calculate-utility(item i ten-random-patches)
       if (p-utility >= 0) [
-        if (p-utility < utility) [
-          set selected-patch item i ten-random-patches
+        if (p-utility > utility)[; and p-utility < budget) [
+          if (uncrowded(item i ten-random-patches)) [
+            set selected-patch item i ten-random-patches
+          ]
         ]
       ]
       set i (i + 1)
@@ -181,12 +187,112 @@ to people-search
   ]
 end
 
+to-report uncrowded [patch_]
+  report true
+end
+
+to landLord-cost-adjust
+  ask-concurrent landlords [
+    ; get reference to current landlord for use later
+    let landlord! self
+    ; allocate temp varibles
+    let price-change 0
+    let stock count patches with [belongs-to = landlord!]
+    let used-stock 0
+    ;count number of patches with people on
+    ask patches with [belongs-to = landlord!] [
+      if(any? people-on self) [
+        set used-stock used-stock + count people-on self
+      ]
+    ]
+
+    ;percentage of the stock before landlord starts lowering prices
+    ;should be 100 but we never get stock use that high
+    let stock-balance (stock / 100) * landlord-stock-balance
+    ;calc stock avalible
+    set net-stock-level  stock - used-stock
+
+    if-else(auto-landlord-stock)
+    [
+      let c-landlord count landlords
+      let c-people count people
+      let avg (c-people / c-landlord)
+
+      if-else(used-stock > avg)
+      [ set price-change  1 ]
+      [ set price-change  -1 ]
+    ]
+    [
+      ; if the stocked avalible is more than the target start reducing prices
+      set price-change  ( (stock-balance - net-stock-level) / landlord-cost-multiplier )
+    ]
+    ;set price
+    set base-land-cost base-land-cost + price-change
+
+    ; min stock value
+    if(base-land-cost < 1 )
+    [set base-land-cost  1]
+    ; show(ll)
+    ; show(base-land-cost)
+
+    ; assign new value to patches
+    ask patches with [belongs-to = landlord!] [
+      set p-land-cost [base-land-cost] of landlord!
+    ]
+  ]
+  ask patches [set pcolor (p-land-cost + 10)]
+end
+
+to landlord-cost-adjust2
+  ask landlords [
+    ; allocate temp variables
+    let stock ( count patches with [belongs-to = myself] )
+    ;show "stock"
+    ;show stock
+    let used-stock 0
+
+    ; count number of patches with people on
+    ask patches with [belongs-to = myself] [
+       if(any? people-on myself) [
+         set used-stock (used-stock + 1)
+       ]
+    ]
+
+    ;show("used-stock")
+    ;percentage of the stock before landlord starts lowering prices
+    ;should be 100 but we never get stock use that high
+    let stock-balance ( stock * (landlord-stock-balance / 100) )
+    ;show "stock-balance"
+    ;show stock-balance
+    ;calc stock available
+    set net-stock-level ( stock - used-stock )
+    ;show "net-stock-level"
+    ;show net-stock-level
+    ; if the stocked avalible is more than the target start reducing prices
+    let price-change  ( (stock-balance - net-stock-level ) / landlord-cost-multiplier )
+    ;set price
+    set base-land-cost base-land-cost + price-change
+
+   ; min stock value
+    if(base-land-cost < 1 )
+    [set base-land-cost  1]
+   ;; show(ll)
+   ; show(base-land-cost)
+
+    ; assign new value to patches
+    ask patches with [belongs-to = myself] [
+      set p-land-cost [base-land-cost] of myself
+    ]
+  ]
+  ask patches [ set pcolor (p-land-cost + 9) ]
+end
+
 to-report get-budget [patch!]
-  report [wage-output] of firm! - (commute-cost-per-patch * calculate-patch-firm-distance-pythagoras(patch!))
+  report ( [wage-output] of firm! - (commute-cost-per-patch) * calculate-patch-firm-distance(patch!) )
 end
 
 to-report get-product-cost [patch!]
-  report [base-product-cost] of firm! + ((delivery-cost-per-patch)); * calculate-patch-firm-distance-pythagoras(patch!))
+  report [base-product-cost] of firm! + ((delivery-cost-per-patch)); * calculate-patch-firm-distance(patch!))
 end
 
 to-report get-spending-on-goods [patch!]
@@ -211,7 +317,9 @@ end
 ; -- BROKEN --
 
 to-report get-spending-on-land [patch!]
-  report ( [p-land-cost] of patch! ^ ((1 / (lov - 1)) * get-budget(patch!)) ) / ( get-product-cost(patch!) ^ (lov / (lov - 1)) )
+  report ( [p-land-cost] of patch! ^ ((1 / (lov - 1)) * get-budget(patch!)) )
+                                       /
+                ( get-product-cost(patch!) ^ (lov / (lov - 1)) )
 end
 
 to-report get-utility
@@ -221,14 +329,36 @@ end
 to-report calculate-utility [patch!]
   ifelse (get-budget(patch!) <= 0)
   [ report -1]
-  [ report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
+  [ set dif-between-g-and-l ( dif-between-g-and-l + ( get-spending-on-goods(patch!) -  get-spending-on-land(patch!) ) )
+    report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
 end
 
+
+to-report calculate-patch-firm-distance [patch!]
+  ; cosine rule:
+  ; a² = b² + c² - (2bc * cosA)
+  let b (distance patch!)
+  let c (distance firm!)
+  let heading-to-patch 0
+
+  ; "towards" errors when finding the angle between the same two patches,
+  ; sometimes we do this for finding parameters at current patch for people
+  ; so we needed a check
+  let A abs( towards-with-null-check(patch!) - towards-with-null-check(firm!) )
+  report sqrt ( b ^(2) + c ^(2) - ((2 * b * c) * cos(A)) )
+end
+
+
 to-report calculate-patch-firm-distance-pythagoras [patch!]
+  ; only works with right-angled triangles
   report sqrt ((distance patch!)^(2) + (distance firm!)^(2))
 end
 
-
+to-report towards-with-null-check [patch!]
+  ifelse(patch! = patch-here and pycor != [pycor] of patch-here and pxcor != [pxcor] of patch-here)
+  [ report towards(patch!) ]
+  [ report 0 ]
+end
 
 
 
@@ -274,6 +404,39 @@ to help-people-search
 ;  ;list of turtles on this patch
 ;
 ;
+end
+
+
+; laura's code
+to-report calculate-offer
+
+ ; report (
+    ; add % for frugality
+   ; ((((spending-on-land )^(lov - 1))*(base-land-cost + (commute-cost-per-patch * calculate-patch-firm-distance-pythagoras ))^(lov))/( budget ^ (lov - 1)))
+  ;  )
+end
+
+to people-search-perfect
+  ask people [
+    let ten-random-patches []
+    ask other patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
+
+    let i 0
+    while [ i < length ten-random-patches] [
+      let p-utility calculate-utility(item i ten-random-patches)
+      if (p-utility >= 0) [
+      ;  show (p-utility > (utility))
+        if (round p-utility > round utility)[; and p-utility < budget) [
+          set selected-patch item i ten-random-patches
+        ]
+      ]
+      set i (i + 1)
+    ]
+    if (selected-patch != 0) [
+      move-to selected-patch
+      set amount-people-moved (amount-people-moved + 1)
+    ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -339,24 +502,24 @@ NIL
 
 SLIDER
 18
-122
+74
 190
-155
+107
 num-landlords
 num-landlords
 5
 1000
-5.0
+309.0
 1
 1
 NIL
 HORIZONTAL
 
 SWITCH
-18
-184
-165
-217
+19
+120
+166
+153
 landlords-visible
 landlords-visible
 1
@@ -364,21 +527,21 @@ landlords-visible
 -1000
 
 SWITCH
-1089
-14
-1292
-47
-bidded-land-costs-percede
-bidded-land-costs-percede
+1065
+15
+1268
+48
+bidded-land-costs-persist
+bidded-land-costs-persist
 1
 1
 -1000
 
 SLIDER
-20
-277
-192
-310
+19
+317
+191
+350
 num-firms
 num-firms
 1
@@ -390,10 +553,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-21
-319
-193
-352
+20
+359
+192
+392
 wage-gap
 wage-gap
 1
@@ -431,10 +594,10 @@ city-radius%
 HORIZONTAL
 
 SLIDER
-17
-534
-189
-567
+16
+574
+188
+607
 lov-range
 lov-range
 0
@@ -446,25 +609,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-26
-441
-198
-474
+25
+481
+197
+514
 num-people
 num-people
 5
 1000
-1000.0
+284.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-24
-360
-210
-393
+23
+400
+209
+433
 commute-cost-per-patch
 commute-cost-per-patch
 0.00
@@ -476,10 +639,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-26
-406
-218
-439
+25
+446
+217
+479
 delivery-cost-per-patch
 delivery-cost-per-patch
 0.05
@@ -491,10 +654,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-1121
-192
-1333
-237
+1064
+58
+1248
+103
 NIL
 mean [base-land-cost] of landlords
 17
@@ -502,10 +665,10 @@ mean [base-land-cost] of landlords
 11
 
 MONITOR
-1126
-265
-1465
-310
+1065
+252
+1239
+297
 NIL
 mean [p-land-cost] of patches
 17
@@ -513,10 +676,10 @@ mean [p-land-cost] of patches
 11
 
 MONITOR
-1133
-342
-1302
-387
+1065
+302
+1234
+347
 NIL
 min [p-land-cost] of patches
 17
@@ -524,10 +687,10 @@ min [p-land-cost] of patches
 11
 
 MONITOR
-1137
-132
-1331
-177
+1064
+108
+1249
+153
 NIL
 min [base-land-cost] of landlords
 17
@@ -535,10 +698,10 @@ min [base-land-cost] of landlords
 11
 
 BUTTON
-1113
-516
-1313
-549
+1069
+561
+1227
+594
 NIL
 ask people [set color white]
 NIL
@@ -552,10 +715,10 @@ NIL
 1
 
 MONITOR
-1119
-407
-1260
-452
+1066
+410
+1237
+455
 NIL
 mean [utility] of people
 17
@@ -563,12 +726,12 @@ mean [utility] of people
 11
 
 BUTTON
-1124
-579
-1397
-612
+1070
+597
+1339
+630
 NIL
-ask patches [set pcolor (p-land-cost + 9)]
+ask patches [set pcolor (p-land-cost + 10)]
 NIL
 1
 T
@@ -580,10 +743,10 @@ NIL
 1
 
 MONITOR
-1338
-355
-1508
-400
+1066
+352
+1236
+397
 NIL
 max[p-land-cost] of patches
 17
@@ -610,10 +773,10 @@ PENS
 "pen-ppl" 1.0 0 -16777216 true "" "plot count people"
 
 MONITOR
-1283
-422
-1417
-467
+1065
+462
+1199
+507
 NIL
 max [utility] of people
 17
@@ -621,10 +784,10 @@ max [utility] of people
 11
 
 MONITOR
-1316
-481
-1445
-526
+1065
+511
+1194
+556
 NIL
 min [utility] of people
 17
@@ -632,10 +795,10 @@ min [utility] of people
 11
 
 SLIDER
-16
-492
-188
-525
+15
+532
+187
+565
 lov-median
 lov-median
 0.1
@@ -647,10 +810,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-1161
-61
-1449
-106
+1278
+11
+1407
+56
 NIL
 amount-people-moved
 17
@@ -673,10 +836,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-1487
-559
-1713
-592
+1231
+561
+1370
+594
 NIL
 ask people [set label \"\"]
 NIL
@@ -690,10 +853,10 @@ NIL
 1
 
 MONITOR
-1542
-264
-1746
-309
+1244
+412
+1448
+457
 NIL
 percentage-of-best-homed-people
 17
@@ -701,10 +864,10 @@ percentage-of-best-homed-people
 11
 
 MONITOR
-1514
-709
-1663
-754
+1248
+511
+1397
+556
 NIL
 perc-best-homed-people
 17
@@ -712,10 +875,10 @@ perc-best-homed-people
 11
 
 BUTTON
-1509
-654
-1732
-687
+1211
+469
+1434
+502
 NIL
 percentage-of-best-homed-people
 T
@@ -727,6 +890,133 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+20
+220
+194
+253
+landlord-stock-balance
+landlord-stock-balance
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+23
+180
+201
+213
+landlord-cost-multiplier
+landlord-cost-multiplier
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+1251
+325
+1425
+358
+NIL
+ask people [ set utility 10]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1061
+173
+1255
+218
+NIL
+mean [spending-on-goods] of people
+17
+1
+11
+
+MONITOR
+1260
+173
+1466
+218
+NIL
+mean [spending-on-land] of people
+17
+1
+11
+
+SLIDER
+1268
+70
+1440
+103
+personal-bubble
+personal-bubble
+0
+10
+50.0
+0.05
+1
+NIL
+HORIZONTAL
+
+SLIDER
+1268
+115
+1440
+148
+crowding-cost
+crowding-cost
+0
+100
+50.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+20
+827
+213
+860
+Send people to perfect patch
+people-search-perfect
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SWITCH
+20
+260
+183
+293
+auto-landlord-stock
+auto-landlord-stock
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
