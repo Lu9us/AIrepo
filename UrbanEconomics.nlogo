@@ -13,7 +13,7 @@ breed [firms firm]
 people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
-patches-own [p-land-cost belongs-to]
+patches-own [p-land-cost belongs-to my-neighbors num-neighbors uncrowd]
 
 to setup
   set amount-people-moved 0
@@ -143,7 +143,7 @@ end
 ; GO
 
 to go
-  landlord-cost-adjust
+  ;landlord-cost-adjust
   people-set-attributes
   people-search
   show dif-between-g-and-l / num-people
@@ -184,11 +184,11 @@ to people-search
       move-to selected-patch
       set amount-people-moved (amount-people-moved + 1)
     ]
-  ]
-end
 
-to-report uncrowded [patch_]
-  report true
+    ; no bidding needed
+    if patch-here = selected-patch
+    [ claim-patch selected-patch ]
+  ]
 end
 
 to landLord-cost-adjust
@@ -255,23 +255,6 @@ to-report get-spending-on-goods [patch!]
   report ( ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!)) / ( [p-land-cost] of patch! ^ (lov / (lov - 1)) ))
 end
 
-
-; -- BROKEN --
-
-to-report get-spending-on-goods2 [patch!]
-  report ( stuff1(patch!) / stuff2(patch!) )
-end
-
-to-report stuff1 [patch!]
-  report ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!))
-end
-
-to-report stuff2 [patch!]
-  report ( [p-land-cost] of patch! ^ (lov / (lov - 1)) )
-end
-
-; -- BROKEN --
-
 to-report get-spending-on-land [patch!]
   report ( [p-land-cost] of patch! ^ ((1 / (lov - 1)) * get-budget(patch!)) )
                                        /
@@ -289,6 +272,22 @@ to-report calculate-utility [patch!]
     report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
 end
 
+; no bidding version
+to claim-patch [_patch]
+  ask _patch [set belongs-to myself]
+end
+
+to-report uncrowded [patch_]
+  ask patch_ [
+    set my-neighbors other people in-radius personal-bubble
+    set num-neighbors count my-neighbors
+
+    ifelse (num-neighbors > people-crowding)
+    [set uncrowd false ]
+    [set uncrowd true ]
+  ]
+  report(uncrowd)
+end
 
 to-report calculate-patch-firm-distance [patch!]
   ; cosine rule:
@@ -517,7 +516,7 @@ wage-gap
 wage-gap
 1
 3
-3.0
+1.0
 1
 1
 NIL
@@ -573,7 +572,7 @@ num-people
 num-people
 5
 1000
-284.0
+1000.0
 1
 1
 NIL
@@ -684,10 +683,10 @@ mean [utility] of people
 BUTTON
 1070
 597
-1339
+1350
 630
 NIL
-ask patches [set pcolor (p-land-cost + 10)]
+ask patches [set pcolor (p-land-cost + 9.75)]
 NIL
 1
 T
@@ -923,10 +922,10 @@ SLIDER
 103
 personal-bubble
 personal-bubble
-0
-10
-50.0
-0.05
+1
+8
+8.0
+0.25
 1
 NIL
 HORIZONTAL
@@ -936,10 +935,10 @@ SLIDER
 115
 1440
 148
-crowding-cost
-crowding-cost
+people-crowding
+people-crowding
 0
-100
+300
 50.0
 1
 1
@@ -970,7 +969,7 @@ SWITCH
 293
 auto-landlord-stock
 auto-landlord-stock
-0
+1
 1
 -1000
 
