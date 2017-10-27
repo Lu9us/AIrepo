@@ -29,7 +29,7 @@ end
 to setup-landlords
   create-landlords num-landlords
   ask landlords [
-    set base-land-cost ((round random 4) + 1) * 0.25
+    set base-land-cost ((round random 40) + 1) * 0.25
     set p-color ( one-of [0 10 20 30 40 50 60 70 80 90 110 120 130] + one-of [3 4 5 6 7 8 9] )
     ifelse (landlords-visible = true)
     [ set color (p-color - 3)]
