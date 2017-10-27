@@ -10,10 +10,10 @@ breed [people person]
 breed [landlords landlord]
 breed [firms firm]
 
-people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
+people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income  ]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
-patches-own [p-land-cost belongs-to]
+patches-own [p-land-cost belongs-to my-neighbors num-neighbors uncrowd]
 
 to setup
   set amount-people-moved 0
@@ -168,8 +168,10 @@ to people-search
     while [ i < length ten-random-patches] [
       let p-utility calculate-utility(item i ten-random-patches)
       if (p-utility >= 0) [
-        if (p-utility < utility) [
-          set selected-patch item i ten-random-patches
+        if (p-utility > utility) [
+          if (uncrowded(item i ten-random-patches)) [
+            set selected-patch item i ten-random-patches
+          ]
         ]
       ]
       set i (i + 1)
@@ -177,9 +179,33 @@ to people-search
     if (selected-patch != 0) [
       move-to selected-patch
       set amount-people-moved (amount-people-moved + 1)
+
+      ;;no bidding needed
+      if patch-here = selected-patch
+        [ claim-patch selected-patch ]
     ]
+
+
   ]
 end
+
+
+
+;;no bidding version
+to claim-patch [_patch]
+     ask _patch [set belongs-to myself]
+end
+
+
+
+
+;;density cost crowding bidding when land cost
+
+
+
+
+
+
 
 to-report get-budget [patch!]
   report [wage-output] of firm! - (commute-cost-per-patch * calculate-patch-firm-distance-pythagoras(patch!))
@@ -235,16 +261,24 @@ end
 ; RANDOM UTILITIES
 
 
-;to-report crowding
-;  report(
-;    turtles with member? (in-radius personal-bubble) []
-;
-;
-;    ;personal-bubble ???radius distance-myself
-;
-;    )
-;
-;end
+;for each patch in 10 random
+to-report uncrowded [patch-]
+
+    ask patches [
+    set my-neighbors other people in-radius personal-bubble
+
+    set num-neighbors count my-neighbors
+
+    ifelse (num-neighbors > people-crowding)
+    [set uncrowd false ]
+    [set uncrowd true ]
+
+
+
+  ]
+    report(uncrowd)
+
+end
 
 
 ;to-report calculate-offer
@@ -287,7 +321,6 @@ to percentage-of-best-homed-people
   ]
   set perc-best-homed-people num
 end
-
 
 
 
