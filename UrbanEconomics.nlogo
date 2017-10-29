@@ -13,7 +13,7 @@ breed [firms firm]
 people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
-patches-own [p-land-cost landlord! occupant my-neighbors num-neighbors uncrowd]
+patches-own [p-land-cost landlord! occupant]
 
 to setup
   set amount-people-moved 0
@@ -173,11 +173,9 @@ to people-search
     while [ i < length ten-random-patches] [
       let p-utility calculate-utility(item i ten-random-patches)
       if (p-utility >= 0) [
-        if (p-utility > utility-temp)[; and p-utility < budget) [
-          ;if (uncrowded(item i ten-random-patches)) [
+        if (p-utility > utility-temp)[
             set selected-patch item i ten-random-patches
             set utility-temp (p-utility)
-          ;]
         ]
       ]
       set i (i + 1)
@@ -253,11 +251,19 @@ to-report get-product-cost [patch!]
 end
 
 to-report get-spending-on-goods [patch!]
-  report ( ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!)) / ( [p-land-cost] of patch! ^ (lov / (lov - 1)) ))
+  let land-or-density-cost 0
+  ifelse(land-or-density)
+  [set land-or-density-cost [p-land-cost] of patch!]
+  [set land-or-density-cost ( get-density-cost(self) )]
+  report ( ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!)) / ( land-or-density-cost ^ (lov / (lov - 1)) ))
 end
 
 to-report get-spending-on-land [patch!]
-  report ( [p-land-cost] of patch! ^ ((1 / (lov - 1)) * get-budget(patch!)) )
+  let land-or-density-cost 0
+  ifelse(land-or-density)
+  [set land-or-density-cost [p-land-cost] of patch!]
+  [set land-or-density-cost ( get-density-cost(self) )]
+  report ( land-or-density-cost ^ ((1 / (lov - 1)) * get-budget(patch!)) )
                                        /
                 ( get-product-cost(patch!) ^ (lov / (lov - 1)) )
 end
@@ -278,17 +284,24 @@ to claim-patch [_patch]
   ask _patch [set occupant myself]
 end
 
-to-report uncrowded [patch_]
-  set uncrowd true
-  ;ask patch_ [
-  ;  set my-neighbors other people in-radius personal-bubble
-  ;  set num-neighbors count my-neighbors
+to-report get-density-cost [person_]
+  let density-sum 0
+  let num-neighbors count other people in-radius personal-bubble
+  ask other people in-radius personal-bubble [
 
-  ;  ifelse (num-neighbors > people-crowding)
-  ;  [set uncrowd false ]
-  ;  [set uncrowd true ]
-  ;]
-  report(uncrowd)
+   let dist  ( distance person_ )
+
+   let dist-sum  ( 1 -( dist / personal-bubble ))
+   set density-sum  ( density-sum + dist-sum )
+  ]
+
+
+  if num-neighbors <= 0 [
+    set num-neighbors 1]
+
+  let density-calc ( density-sum / num-neighbors)
+
+ report ( ((density-calc * 10) + 1) )
 end
 
 ; Only use for patches that the person isn't on
@@ -361,7 +374,6 @@ to help-people-search
 ;
 end
 
-; laura's code
 to-report calculate-offer
 
  ; report (
@@ -370,7 +382,6 @@ to-report calculate-offer
   ;  )
 end
 
-; HERE: last p-utility isn't the same as calculated utility when person has moved, e.g. p-util can be 80 but actual is -1 when moving
 to people-search-perfect
   ask people [
     let utility-temp (utility)
