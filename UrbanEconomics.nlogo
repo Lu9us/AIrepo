@@ -10,7 +10,7 @@ breed [people person]
 breed [landlords landlord]
 breed [firms firm]
 
-people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
+people-own [firm! home! selected-patch land-density-cost lov budget product-cost spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
 patches-own [p-land-cost landlord! occupant]
@@ -286,22 +286,20 @@ end
 
 to-report get-density-cost [person_]
   let density-sum 0
-  let num-neighbors count other people in-radius personal-bubble
-  ask other people in-radius personal-bubble [
+  let density-calc 0
+  let neighbors-in-bubble other people in-radius personal-bubble
+  if (count neighbors-in-bubble >= 1) [
+    ask neighbors-in-bubble [
 
-   let dist  ( distance person_ )
+      let dist  ( distance person_ )
 
-   let dist-sum  ( 1 -( dist / personal-bubble ))
-   set density-sum  ( density-sum + dist-sum )
+      let dist-sum  ( 1 -( dist / personal-bubble ))
+      set density-sum  ( density-sum + dist-sum )
+    ]
+    set density-calc ( density-sum / count neighbors-in-bubble)
   ]
-
-
-  if num-neighbors <= 0 [
-    set num-neighbors 1]
-
-  let density-calc ( density-sum / num-neighbors)
-
- report ( ((density-calc * 10) + 1) )
+  ask person_ [set land-density-cost ((density-calc * 10) + 1)]
+  report ( ((density-calc * 10) + 1) )
 end
 
 ; Only use for patches that the person isn't on
@@ -545,7 +543,7 @@ wage-gap
 wage-gap
 1
 3
-1.0
+2.0
 1
 1
 NIL
@@ -553,9 +551,9 @@ HORIZONTAL
 
 MONITOR
 21
-639
+655
 191
-684
+700
 NIL
 wage-list
 17
@@ -616,7 +614,7 @@ commute-cost-per-patch
 commute-cost-per-patch
 0.00
 0.5
-0.06
+0.01
 0.005
 1
 NIL
@@ -906,10 +904,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-1251
-325
-1425
-358
+1484
+329
+1658
+362
 NIL
 ask people [ set utility 10]
 NIL
@@ -953,8 +951,8 @@ personal-bubble
 personal-bubble
 1
 8
-8.0
-0.25
+1.0
+0.125
 1
 NIL
 HORIZONTAL
@@ -1031,10 +1029,10 @@ NIL
 1
 
 BUTTON
-1259
-279
-1445
-312
+1492
+283
+1678
+316
 NIL
 ask people [set lov lov-test]
 NIL
@@ -1048,16 +1046,92 @@ NIL
 1
 
 SLIDER
-1259
-246
-1431
-279
+1492
+250
+1664
+283
 lov-test
 lov-test
 0
 1
 0.15
 0.05
+1
+NIL
+HORIZONTAL
+
+SWITCH
+20
+612
+160
+645
+land-or-density
+land-or-density
+1
+1
+-1000
+
+MONITOR
+1251
+254
+1457
+299
+NIL
+mean [land-density-cost] of people
+17
+1
+11
+
+MONITOR
+1251
+309
+1446
+354
+NIL
+min [land-density-cost] of people
+17
+1
+11
+
+MONITOR
+1252
+365
+1452
+410
+NIL
+max [land-density-cost] of people
+17
+1
+11
+
+BUTTON
+1454
+80
+1686
+113
+NIL
+ask people [set personal-bubble bbl]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+1461
+51
+1633
+84
+bbl
+bbl
+1
+8
+1.0
+0.125
 1
 NIL
 HORIZONTAL
