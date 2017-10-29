@@ -13,7 +13,7 @@ breed [firms firm]
 people-own [firm! home! selected-patch land-cost lov budget product-cost spending-on-land spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
-patches-own [p-land-cost belongs-to my-neighbors num-neighbors uncrowd]
+patches-own [p-land-cost landlord! occupant my-neighbors num-neighbors uncrowd]
 
 to setup
   set amount-people-moved 0
@@ -39,7 +39,7 @@ to setup-landlords
     set pcolor p-color
     ask patch-here [
       set p-land-cost [base-land-cost] of myself
-      set belongs-to myself
+      set landlord! myself
     ]
     set home-x pxcor
     set home-y pycor
@@ -69,7 +69,7 @@ to setup-landlord-patches
       set pcolor p-color
       ask patch-here [
         set p-land-cost [base-land-cost] of myself
-        set belongs-to myself
+        set landlord! myself
       ]
     ]
     [
@@ -80,11 +80,11 @@ to setup-landlord-patches
   ]
   ask patches [
     if pcolor = black [
-      if ( all? neighbors4 [belongs-to = [belongs-to] of one-of neighbors4 and belongs-to != 0])
+      if ( all? neighbors4 [landlord! = [landlord!] of one-of neighbors4 and landlord! != 0] )
       [
         set pcolor [pcolor] of one-of neighbors4
         set p-land-cost [p-land-cost] of one-of neighbors4
-        set belongs-to [belongs-to] of one-of neighbors4
+        set landlord! [landlord!] of one-of neighbors4
       ]
     ]
   ]
@@ -95,7 +95,7 @@ to setup-cellular-landlord-patches
     let clone-patch one-of neighbors4 with [pcolor != black]
     if(clone-patch != nobody) [
      set p-land-cost [p-land-cost] of clone-patch
-     set belongs-to [belongs-to] of clone-patch
+     set landlord! [landlord!] of clone-patch
      set pcolor [pcolor] of clone-patch
     ]
   ]
@@ -106,9 +106,9 @@ to setup-firms
   ask firms [
     set wage-output round (random (wage-gap * num-firms) + 0.5)
 
-    ifelse (num-firms = 1)
-    [ set base-product-cost 1 ]
-    [ set base-product-cost one-of [1 2 3 4] ]
+    ;ifelse (num-firms = 1)
+     set base-product-cost 1
+    ;[ set base-product-cost one-of [1 2 3 4] ]
 
     set label wage-output
     set label-color white
@@ -165,6 +165,7 @@ end
 
 to people-search
   ask people [
+    let utility-temp (utility)
     let ten-random-patches []
     ask n-of 10 other patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
 
@@ -172,35 +173,33 @@ to people-search
     while [ i < length ten-random-patches] [
       let p-utility calculate-utility(item i ten-random-patches)
       if (p-utility >= 0) [
-        if (p-utility > utility)[; and p-utility < budget) [
-          if (uncrowded(item i ten-random-patches)) [
+        if (p-utility > utility-temp)[; and p-utility < budget) [
+          ;if (uncrowded(item i ten-random-patches)) [
             set selected-patch item i ten-random-patches
-          ]
+            set utility-temp (p-utility)
+          ;]
         ]
       ]
       set i (i + 1)
     ]
     if (selected-patch != 0) [
       move-to selected-patch
+      claim-patch selected-patch
       set amount-people-moved (amount-people-moved + 1)
     ]
-
-    ; no bidding needed
-    if patch-here = selected-patch
-    [ claim-patch selected-patch ]
   ]
 end
 
 to landLord-cost-adjust
   ask-concurrent landlords [
     ; get reference to current landlord for use later
-    let landlord! self
+    let landlord_self self
     ; allocate temp varibles
     let price-change 0
-    let stock count patches with [belongs-to = landlord!]
+    let stock count patches with [landlord! = landlord_self]
     let used-stock 0
     ;count number of patches with people on
-    ask patches with [belongs-to = landlord!] [
+    ask patches with [landlord! = landlord_self] [
       if(any? people-on self) [
         set used-stock used-stock + count people-on self
       ]
@@ -236,19 +235,21 @@ to landLord-cost-adjust
     ; show(base-land-cost)
 
     ; assign new value to patches
-    ask patches with [belongs-to = landlord!] [
-      set p-land-cost [base-land-cost] of landlord!
+    ask patches with [landlord! = landlord_self] [
+      set p-land-cost [base-land-cost] of landlord_self
     ]
   ]
   ask patches [set pcolor (p-land-cost + 10)]
 end
 
 to-report get-budget [patch!]
-  report ( [wage-output] of firm! - (commute-cost-per-patch) * calculate-patch-firm-distance(patch!) )
+  let dist 0
+  ask firm! [ set dist (distance patch!) ]
+  report ( [wage-output] of firm! - ((commute-cost-per-patch) * dist) )
 end
 
 to-report get-product-cost [patch!]
-  report [base-product-cost] of firm! + ((delivery-cost-per-patch)); * calculate-patch-firm-distance(patch!))
+  report [base-product-cost] of firm! + ((delivery-cost-per-patch))
 end
 
 to-report get-spending-on-goods [patch!]
@@ -268,33 +269,34 @@ end
 to-report calculate-utility [patch!]
   ifelse (get-budget(patch!) <= 0)
   [ report -1]
-  [ set dif-between-g-and-l ( dif-between-g-and-l + ( get-spending-on-goods(patch!) -  get-spending-on-land(patch!) ) )
+  [  set dif-between-g-and-l ( dif-between-g-and-l + ( get-spending-on-goods(patch!) -  get-spending-on-land(patch!) ) )
     report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
 end
 
 ; no bidding version
 to claim-patch [_patch]
-  ask _patch [set belongs-to myself]
+  ask _patch [set occupant myself]
 end
 
 to-report uncrowded [patch_]
-  ask patch_ [
-    set my-neighbors other people in-radius personal-bubble
-    set num-neighbors count my-neighbors
+  set uncrowd true
+  ;ask patch_ [
+  ;  set my-neighbors other people in-radius personal-bubble
+  ;  set num-neighbors count my-neighbors
 
-    ifelse (num-neighbors > people-crowding)
-    [set uncrowd false ]
-    [set uncrowd true ]
-  ]
+  ;  ifelse (num-neighbors > people-crowding)
+  ;  [set uncrowd false ]
+  ;  [set uncrowd true ]
+  ;]
   report(uncrowd)
 end
 
+; Only use for patches that the person isn't on
 to-report calculate-patch-firm-distance [patch!]
   ; cosine rule:
   ; a² = b² + c² - (2bc * cosA)
   let b (distance patch!)
   let c (distance firm!)
-  let heading-to-patch 0
 
   ; "towards" errors when finding the angle between the same two patches,
   ; sometimes we do this for finding parameters at current patch for people
@@ -303,21 +305,19 @@ to-report calculate-patch-firm-distance [patch!]
   report sqrt ( b ^(2) + c ^(2) - ((2 * b * c) * cos(A)) )
 end
 
-
-to-report calculate-patch-firm-distance-pythagoras [patch!]
-  ; only works with right-angled triangles
-  report sqrt ((distance patch!)^(2) + (distance firm!)^(2))
-end
-
 to-report towards-with-null-check [patch!]
   ifelse(patch! = patch-here and pycor != [pycor] of patch-here and pxcor != [pxcor] of patch-here)
   [ report towards(patch!) ]
   [ report 0 ]
 end
 
+to-report calculate-patch-firm-distance-pythagoras [patch!]
+  ; only works with right-angled triangles
+  report sqrt ((distance patch!)^(2) + (distance firm!)^(2))
+end
 
 
-; RANDOM UTILITIES
+; Utilities
 
 to-report check-val[val]
   if(val < 0) [
@@ -341,7 +341,7 @@ to percentage-of-best-homed-people
     let i 0
     while [ i < length all-patches] [
       let temp-util calculate-utility (item i all-patches)
-      if (temp-util < best-utility)
+      if (temp-util > best-utility)
       [ set best-utility temp-util ]
       set i (i + 1)
     ]
@@ -361,7 +361,6 @@ to help-people-search
 ;
 end
 
-
 ; laura's code
 to-report calculate-offer
 
@@ -371,27 +370,46 @@ to-report calculate-offer
   ;  )
 end
 
+; HERE: last p-utility isn't the same as calculated utility when person has moved, e.g. p-util can be 80 but actual is -1 when moving
 to people-search-perfect
   ask people [
-    let ten-random-patches []
-    ask other patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
-
+    let utility-temp (utility)
+    let all-patches []
+    ask patches with [not any? people-here] [set all-patches lput self all-patches]
+    if(log!) [
+      show "count"
+      show count patches
+      show "count all"
+      show length all-patches
+    ]
     let i 0
-    while [ i < length ten-random-patches] [
-      let p-utility calculate-utility(item i ten-random-patches)
+    while [ i < length all-patches] [
+      let p-utility calculate-utility(item i all-patches)
       if (p-utility >= 0) [
-      ;  show (p-utility > (utility))
-        if (round p-utility > round utility)[; and p-utility < budget) [
-          set selected-patch item i ten-random-patches
+        if (p-utility > utility-temp)[; and p-utility < budget) [
+          ;if (uncrowded(item i ten-random-patches)) [
+          if(log!) [
+            show "p-utility"
+            show p-utility
+            show "utility-temp"
+            show utility-temp
+            show "p-patch"
+            show item i all-patches
+          ]
+          set selected-patch item i all-patches
+          set utility-temp (p-utility)
+          ;]
         ]
       ]
       set i (i + 1)
     ]
     if (selected-patch != 0) [
       move-to selected-patch
+      claim-patch selected-patch
       set amount-people-moved (amount-people-moved + 1)
     ]
   ]
+  people-set-attributes
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -570,9 +588,9 @@ SLIDER
 514
 num-people
 num-people
-5
+1
 1000
-1000.0
+993.0
 1
 1
 NIL
@@ -587,8 +605,8 @@ commute-cost-per-patch
 commute-cost-per-patch
 0.00
 0.5
-0.1
-0.05
+0.06
+0.005
 1
 NIL
 HORIZONTAL
@@ -946,10 +964,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-20
-827
-213
-860
+13
+840
+206
+873
 Send people to perfect patch
 people-search-perfect
 NIL
@@ -972,6 +990,66 @@ auto-landlord-stock
 1
 1
 -1000
+
+SWITCH
+211
+840
+301
+873
+log!
+log!
+1
+1
+-1000
+
+BUTTON
+1066
+838
+1534
+871
+NIL
+ask patches [set p-land-cost 1]\nask patches [set pcolor (p-land-cost + 9.75)]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1259
+279
+1445
+312
+NIL
+ask people [set lov lov-test]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+1259
+246
+1431
+279
+lov-test
+lov-test
+0
+1
+0.15
+0.05
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
