@@ -497,7 +497,7 @@ num-landlords
 num-landlords
 5
 1000
-1.0
+900.0
 1
 1
 NIL
@@ -510,7 +510,7 @@ SWITCH
 203
 landlords-visible
 landlords-visible
-0
+1
 1
 -1000
 
@@ -553,7 +553,7 @@ city-radius%
 city-radius%
 10
 50
-50.0
+25.0
 1
 1
 %
@@ -1075,33 +1075,72 @@ landlords-change-land-costs
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+A spatial agent-based model to analyse the relationship between several different types of agents to form an economic system. 
+
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+
+Workers (People) look for somewhere to live based on a utility function (distance to work, spending on land and goods, density of people). 
+
+Workplaces (Firms) provide goods for workers and a wage. Landlords provide land for workers to live and base their costs on demand.
+
+Workers receive a wage and a chance to move every tick by randomly selecting ten patches of land and then moving to the most suitable location. 
+
+The model is devised from the interactions between the three sets of agents during this.
+
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+<h3>Setup Parameters</h3>
+Parameters to set before setup is ran, describing properties and behaviours of agents throughout the simulation.
+
+<h3>Run Parameters</h3>
+Parameters that can be changed throughout the simulation run that will affect behaviour and parameters of agents.
+
+<h3>Parameters</h3>
+Buttons to set parameters fitted to either simulation type - land or density. 
+
+<h3>Monitors</h3>
+Monitors for most important attributes of agents, allowing user to view changes in behaviour and average properties of agents.
+
+<h4>Land</h4>
+Monitors for properties used in Land-Cost simulations.
+
+<h4>Density</h4>
+Monitors for properties used in Density simulations.
+
+<h3>Testing</h3>
+Testing modules to change visuals or agent parameters within simulation. This makes experiment analysis and testing easier.
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+Take a note of the direction each group of people (belonging to each firm) move in duing the code running. 
+
+People with a higher wage will care less about goods/ disatance costs and the people with lower wages care less about density in order to maximise their utility costs.
+
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+Resseting the parameters to the default will help you quickly test new variables on the same model setup. 
+
+When looking at density costs, try varying the size of the personal bubble and observe how the people disperse when it increases and vice versa.
+
+The impact of differences in wealth and preferences- test the model with a wider range of wages and see what changes.
+
+Multiple firms- Change the number of firms and how spread out they are and watch for the results.
 
 ## EXTENDING THE MODEL
-vary the land cost of a patch based on its distance from the land lord. 
 
-add personality paramaters into the people agents to make their behaviour more organic 
+Vary the land cost of a patch based on its distance from the land lord. 
+
+Add personality paramaters into the people agents to make their behaviour more organic 
 simulate concepts such as frugality and favrotism to allow the agents a more varied behaviour set. 
 
-make some of the varibles automatic to clean up the UI such as the number of factories and landlords.
+Make some of the varibles automatic to clean up the UI such as the number of factories and landlords.
 
 ## NETLOGO FEATURES
+
 Agent breeds are extensivly used by this model to simulate diffrent types of agent produced by the economic system. Spacial simulation is a large part of this model and as such it uses alot of the spacial-relational tools within net-logo. 
 
 Colors and shapes are used extensivly to differentiate diffrent breeds of agent and diffrent patch properties based on the model settings
