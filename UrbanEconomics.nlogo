@@ -4,7 +4,7 @@
 
 extensions [table]
 
-globals [wage-min wage-max wage-list    amount-people-moved perc-best-homed-people dif-between-g-and-l]
+globals [wage-min wage-max patch-search-set  amount-people-moved perc-best-homed-people dif-between-g-and-l]
 
 breed [people person]
 breed [landlords landlord]
@@ -19,12 +19,15 @@ to setup
   set amount-people-moved 0
   clear-all
   ask patches [set pcolor black]
-  setup-landlords
+  if (land-or-density = "land")
+  [ setup-landlords ]
+  if (land-or-density = "density")
+  [ setup-density ]
   setup-firms
   setup-people
+  set patch-search-set patch-set patches with [not any? firms in-radius 3]
   reset-ticks
 end
-
 
 to setup-landlords
   create-landlords num-landlords
@@ -49,7 +52,9 @@ to setup-landlords
     let patches-assigned count patches with [pcolor != black]
     let assigned% (patches-assigned / patches-count * 100)
 
-    ifelse (assigned% < p-tipping-point)
+    ; landlords set up their patches with their properties,
+    ; then after 10% is mapped use cellular automata to map the rest
+    ifelse (assigned% < 10)
     [ setup-landlord-patches ]
     [ setup-cellular-landlord-patches ]
   ]
@@ -101,28 +106,33 @@ to setup-cellular-landlord-patches
   ]
 end
 
+to setup-density
+  ask patches [set pcolor 2]
+end
+
 to setup-firms
+  let wage-list []
+
   create-firms num-firms
   ask firms [
-    set wage-output round (random (wage-gap * num-firms) + 0.5)
+    while [wage-output = 0 or member? wage-output wage-list] [
+      set wage-output round (random (wage-gap * num-firms) + 0.5)
+    ]
+    set wage-list (lput wage-output wage-list)
 
-    ;ifelse (num-firms = 1)
-     set base-product-cost 1
-    ;[ set base-product-cost one-of [1 2 3 4] ]
+    set base-product-cost 1
 
     set label wage-output
     set label-color white
-    set color color;(wage-output + 2)
+    set color ((wage-output * 10) + 5)
     set shape "pentagon_ol"
     set size 6
 
     while [(xcor = 0 and ycor = 0)]
     [
-      ; radius around firms/ number of firms limits the size you are able to set the city radius
-      move-to one-of patches in-radius ((city-radius% / 100) * (max-pxcor * 2)) with [ not any? firms in-radius 5 ]
+      ; radius around firms limits the size you are able to set the city radius
+      move-to one-of patches in-radius ((city-radius% / 100) * (max-pxcor * 2)) with [ not any? firms in-radius 8 ]
     ]
-
-    set wage-list sentence wage-list wage-output
   ]
 end
 
@@ -146,7 +156,8 @@ to go
   ;landlord-cost-adjust
   people-set-attributes
   people-search
-  show dif-between-g-and-l / num-people
+  show mean [utility] of people
+  ;show dif-between-g-and-l / num-people
   set dif-between-g-and-l 0
 
   tick
@@ -167,7 +178,7 @@ to people-search
   ask people [
     let utility-temp (utility)
     let ten-random-patches []
-    ask n-of 10 other patches with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
+    ask n-of 10 other patch-search-set with [not any? people-here] [set ten-random-patches lput self ten-random-patches]
 
     let i 0
     while [ i < length ten-random-patches] [
@@ -252,17 +263,23 @@ end
 
 to-report get-spending-on-goods [patch!]
   let land-or-density-cost 0
-  ifelse(land-or-density)
+  if (land-or-density = "land")
   [set land-or-density-cost [p-land-cost] of patch!]
+  if (land-or-density = "density")
   [set land-or-density-cost ( get-density-cost(self) )]
-  report ( ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!)) / ( land-or-density-cost ^ (lov / (lov - 1)) ))
+
+  report ( ( get-product-cost(patch!) ^ (1 / (lov - 1)) ) * get-budget(patch!))
+                                         /
+                    ( land-or-density-cost ^ (lov / (lov - 1)) )
 end
 
 to-report get-spending-on-land [patch!]
   let land-or-density-cost 0
-  ifelse(land-or-density)
+  if (land-or-density = "land")
   [set land-or-density-cost [p-land-cost] of patch!]
+  if (land-or-density = "density")
   [set land-or-density-cost ( get-density-cost(self) )]
+
   report ( land-or-density-cost ^ ((1 / (lov - 1)) * get-budget(patch!)) )
                                        /
                 ( get-product-cost(patch!) ^ (lov / (lov - 1)) )
@@ -422,9 +439,9 @@ to people-search-perfect
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-239
+220
 10
-1055
+1036
 827
 -1
 -1
@@ -449,10 +466,10 @@ ticks
 60.0
 
 BUTTON
-19
-36
-82
-69
+13
+10
+76
+43
 NIL
 setup\n
 NIL
@@ -466,10 +483,10 @@ NIL
 1
 
 BUTTON
-106
-38
-169
-71
+82
+10
+145
+43
 NIL
 go
 T
@@ -483,103 +500,81 @@ NIL
 1
 
 SLIDER
-18
-74
-190
-107
+12
+129
+184
+162
 num-landlords
 num-landlords
 5
 1000
-309.0
+297.0
 1
 1
 NIL
 HORIZONTAL
 
 SWITCH
-19
-120
-166
-153
+12
+170
+159
+203
 landlords-visible
 landlords-visible
-1
-1
--1000
-
-SWITCH
-1065
-15
-1268
-48
-bidded-land-costs-persist
-bidded-land-costs-persist
 1
 1
 -1000
 
 SLIDER
-19
-317
-191
-350
+12
+210
+183
+243
 num-firms
 num-firms
 1
 10
-1.0
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-20
-359
-192
-392
+12
+252
+184
+285
 wage-gap
 wage-gap
 1
 3
-2.0
+3.0
 1
 1
 NIL
 HORIZONTAL
 
-MONITOR
-21
-655
-191
-700
-NIL
-wage-list
-17
-1
-11
-
 SLIDER
-15
-703
-187
-736
+13
+418
+184
+451
 city-radius%
 city-radius%
-5
+10
 50
-25.0
+50.0
 1
 1
 %
 HORIZONTAL
 
 SLIDER
-16
-574
-188
-607
+13
+376
+184
+409
 lov-range
 lov-range
 0
@@ -591,25 +586,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-25
-481
-197
-514
+12
+293
+184
+326
 num-people
 num-people
 1
 1000
-993.0
+1000.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-23
-400
-209
-433
+13
+486
+182
+519
 commute-cost-per-patch
 commute-cost-per-patch
 0.00
@@ -621,10 +616,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-25
-446
-217
-479
+13
+527
+182
+560
 delivery-cost-per-patch
 delivery-cost-per-patch
 0.05
@@ -710,9 +705,9 @@ mean [utility] of people
 BUTTON
 1070
 597
-1350
+1374
 630
-NIL
+Set patch colour by land cost (darker ~ cheaper)
 ask patches [set pcolor (p-land-cost + 9.75)]
 NIL
 1
@@ -777,10 +772,10 @@ min [utility] of people
 11
 
 SLIDER
-15
-532
-187
-565
+12
+334
+184
+367
 lov-median
 lov-median
 0.1
@@ -801,21 +796,6 @@ amount-people-moved
 17
 1
 11
-
-SLIDER
-17
-772
-189
-805
-p-tipping-point
-p-tipping-point
-0
-100
-20.0
-1
-1
-NIL
-HORIZONTAL
 
 BUTTON
 1231
@@ -874,10 +854,10 @@ NIL
 1
 
 SLIDER
-20
-220
-194
-253
+1459
+552
+1633
+585
 landlord-stock-balance
 landlord-stock-balance
 0
@@ -889,10 +869,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-23
-180
-201
-213
+1462
+512
+1640
+545
 landlord-cost-multiplier
 landlord-cost-multiplier
 0
@@ -943,31 +923,16 @@ mean [spending-on-land] of people
 11
 
 SLIDER
-1268
-70
-1440
-103
+13
+568
+182
+601
 personal-bubble
 personal-bubble
 1
 8
-1.0
+8.0
 0.125
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1268
-115
-1440
-148
-people-crowding
-people-crowding
-0
-300
-50.0
-1
 1
 NIL
 HORIZONTAL
@@ -990,10 +955,10 @@ NIL
 1
 
 SWITCH
-20
-260
-183
-293
+1459
+592
+1622
+625
 auto-landlord-stock
 auto-landlord-stock
 1
@@ -1007,7 +972,7 @@ SWITCH
 873
 log!
 log!
-1
+0
 1
 -1000
 
@@ -1059,17 +1024,6 @@ lov-test
 1
 NIL
 HORIZONTAL
-
-SWITCH
-20
-612
-160
-645
-land-or-density
-land-or-density
-1
-1
--1000
 
 MONITOR
 1251
@@ -1130,11 +1084,41 @@ bbl
 bbl
 1
 8
-1.0
+3.125
 0.125
 1
 NIL
 HORIZONTAL
+
+TEXTBOX
+18
+57
+168
+75
+Setup Parameters
+12
+0.0
+0
+
+TEXTBOX
+16
+459
+166
+477
+Run Parameters
+12
+0.0
+0
+
+CHOOSER
+12
+77
+150
+122
+land-or-density
+land-or-density
+"land" "density"
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1489,6 +1473,149 @@ NetLogo 6.0.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="density-experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>mean [land-density-cost] of people</metric>
+    <enumeratedValueSet variable="lov-range">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="p-tipping-point">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="lov-test">
+      <value value="0.15"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="num-firms">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="city-radius%">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="log!">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="landlord-cost-multiplier">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="delivery-cost-per-patch">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="num-landlords">
+      <value value="309"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="commute-cost-per-patch">
+      <value value="0.01"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="landlord-stock-balance">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="lov-median">
+      <value value="0.65"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="auto-landlord-stock">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="land-or-density">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bbl">
+      <value value="3.125"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="wage-gap">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bidded-land-costs-persist">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="personal-bubble">
+      <value value="1"/>
+      <value value="0.1"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="landlords-visible">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="people-crowding">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="num-people">
+      <value value="993"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="50"/>
+    <metric>mean [land-density-cost] of people</metric>
+    <enumeratedValueSet variable="lov-range">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="p-tipping-point">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="lov-test">
+      <value value="0.15"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="num-firms">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="city-radius%">
+      <value value="25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="log!">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="landlord-cost-multiplier">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="delivery-cost-per-patch">
+      <value value="0.25"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="num-landlords">
+      <value value="309"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="commute-cost-per-patch">
+      <value value="0.01"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="landlord-stock-balance">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="lov-median">
+      <value value="0.65"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="auto-landlord-stock">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="land-or-density">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bbl">
+      <value value="3.125"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="wage-gap">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="bidded-land-costs-persist">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="personal-bubble">
+      <value value="1"/>
+      <value value="1"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="landlords-visible">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="people-crowding">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="num-people">
+      <value value="993"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
