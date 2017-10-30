@@ -1,22 +1,21 @@
 ; TODO
-; - work out a balancing equation between the spending-on-land and spending-on-goods in the utility function, think of it like a see-saw
+; - work out a balancing equation between the spending-on-land-density and spending-on-goods in the utility function, think of it like a see-saw
 ; - study emergence through parameters
 
 extensions [table]
 
-globals [wage-min wage-max patch-search-set  amount-people-moved perc-best-homed-people dif-between-g-and-l]
+globals [wage-min wage-max patch-search-set  perc-best-homed-people dif-between-g-and-l]
 
 breed [people person]
 breed [landlords landlord]
 breed [firms firm]
 
-people-own [firm! home! selected-patch land-density-cost lov budget product-cost spending-on-land spending-on-goods utility income]
+people-own [firm! home! selected-patch land-density-cost lov budget product-cost spending-on-land-density spending-on-goods utility income]
 landlords-own [base-land-cost net-stock-level home-x home-y p-color]
 firms-own [wage-output base-product-cost]
 patches-own [p-land-cost landlord! occupant]
 
 to setup
-  set amount-people-moved 0
   clear-all
   ask patches [set pcolor black]
   if (land-or-density = "land")
@@ -142,8 +141,6 @@ to setup-people
     set firm! one-of firms
     set lov ( lov-median + random (lov-range * random+-) )
 
-    set label [wage-output] of firm!
-    set label-color [color] of firm!
     set color [color] of firm!
     set shape "person"
     setxy random-xcor random-ycor
@@ -153,13 +150,10 @@ end
 ; GO
 
 to go
-  ;landlord-cost-adjust
+  if(landlords-change-land-costs)
+  [landlord-cost-adjust]
   people-set-attributes
   people-search
-  show mean [utility] of people
-  ;show dif-between-g-and-l / num-people
-  set dif-between-g-and-l 0
-
   tick
 end
 
@@ -169,7 +163,7 @@ to people-set-attributes
    set budget get-budget(home!)
    set product-cost get-product-cost(home!)
    set spending-on-goods get-spending-on-goods(home!)
-   set spending-on-land get-spending-on-land(home!)
+   set spending-on-land-density get-spending-on-land-density(home!)
    set utility calculate-utility(home!)
   ]
 end
@@ -194,7 +188,6 @@ to people-search
     if (selected-patch != 0) [
       move-to selected-patch
       claim-patch selected-patch
-      set amount-people-moved (amount-people-moved + 1)
     ]
   ]
 end
@@ -216,24 +209,21 @@ to landLord-cost-adjust
 
     ;percentage of the stock before landlord starts lowering prices
     ;should be 100 but we never get stock use that high
-    let stock-balance (stock / 100) * landlord-stock-balance
+    let stock-balance (stock / 100) * 50
     ;calc stock avalible
     set net-stock-level  stock - used-stock
 
-    if-else(auto-landlord-stock)
-    [
-      let c-landlord count landlords
-      let c-people count people
-      let avg (c-people / c-landlord)
+    let c-landlord count landlords
+    let c-people count people
+    let avg (c-people / c-landlord)
 
-      if-else(used-stock > avg)
-      [ set price-change  1 ]
-      [ set price-change  -1 ]
-    ]
-    [
-      ; if the stocked avalible is more than the target start reducing prices
-      set price-change  ( (stock-balance - net-stock-level) / landlord-cost-multiplier )
-    ]
+    if-else(used-stock > avg)
+    [ set price-change  1 ]
+    [ set price-change  -1 ]
+
+    ; if the stocked avalible is more than the target start reducing prices
+    set price-change  ( (stock-balance - net-stock-level) / 75 )
+
     ;set price
     set base-land-cost base-land-cost + price-change
 
@@ -258,7 +248,7 @@ to-report get-budget [patch!]
 end
 
 to-report get-product-cost [patch!]
-  report [base-product-cost] of firm! + ((delivery-cost-per-patch))
+  report [base-product-cost] of firm! + ((delivery-cost))
 end
 
 to-report get-spending-on-goods [patch!]
@@ -273,7 +263,7 @@ to-report get-spending-on-goods [patch!]
                     ( land-or-density-cost ^ (lov / (lov - 1)) )
 end
 
-to-report get-spending-on-land [patch!]
+to-report get-spending-on-land-density [patch!]
   let land-or-density-cost 0
   if (land-or-density = "land")
   [set land-or-density-cost [p-land-cost] of patch!]
@@ -286,14 +276,14 @@ to-report get-spending-on-land [patch!]
 end
 
 to-report get-utility
-  report (( spending-on-goods ^ lov ) + ( spending-on-land ^ lov )) ^ (1 / lov)
+  report (( spending-on-goods ^ lov ) + ( spending-on-land-density ^ lov )) ^ (1 / lov)
 end
 
 to-report calculate-utility [patch!]
   ifelse (get-budget(patch!) <= 0)
   [ report -1]
-  [  set dif-between-g-and-l ( dif-between-g-and-l + ( get-spending-on-goods(patch!) -  get-spending-on-land(patch!) ) )
-    report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land(patch!) ^ lov )) ^ (1 / lov) ]
+  [  set dif-between-g-and-l ( dif-between-g-and-l + ( get-spending-on-goods(patch!) -  get-spending-on-land-density(patch!) ) )
+    report (( get-spending-on-goods(patch!) ^ lov ) + ( get-spending-on-land-density(patch!) ^ lov )) ^ (1 / lov) ]
 end
 
 ; no bidding version
@@ -393,7 +383,7 @@ to-report calculate-offer
 
  ; report (
     ; add % for frugality
-   ; ((((spending-on-land )^(lov - 1))*(base-land-cost + (commute-cost-per-patch * calculate-patch-firm-distance-pythagoras ))^(lov))/( budget ^ (lov - 1)))
+   ; ((((spending-on-land-density )^(lov - 1))*(base-land-cost + (commute-cost-per-patch * calculate-patch-firm-distance-pythagoras ))^(lov))/( budget ^ (lov - 1)))
   ;  )
 end
 
@@ -432,7 +422,6 @@ to people-search-perfect
     if (selected-patch != 0) [
       move-to selected-patch
       claim-patch selected-patch
-      set amount-people-moved (amount-people-moved + 1)
     ]
   ]
   people-set-attributes
@@ -508,7 +497,7 @@ num-landlords
 num-landlords
 5
 1000
-297.0
+1.0
 1
 1
 NIL
@@ -517,19 +506,19 @@ HORIZONTAL
 SWITCH
 12
 170
-159
+185
 203
 landlords-visible
 landlords-visible
-1
+0
 1
 -1000
 
 SLIDER
 12
-210
+253
 183
-243
+286
 num-firms
 num-firms
 1
@@ -542,9 +531,9 @@ HORIZONTAL
 
 SLIDER
 12
-252
+295
 184
-285
+328
 wage-gap
 wage-gap
 1
@@ -557,9 +546,9 @@ HORIZONTAL
 
 SLIDER
 13
-418
+461
 184
-451
+494
 city-radius%
 city-radius%
 10
@@ -572,9 +561,9 @@ HORIZONTAL
 
 SLIDER
 13
-376
+419
 184
-409
+452
 lov-range
 lov-range
 0
@@ -587,9 +576,9 @@ HORIZONTAL
 
 SLIDER
 12
-293
+336
 184
-326
+369
 num-people
 num-people
 1
@@ -602,9 +591,9 @@ HORIZONTAL
 
 SLIDER
 13
-486
-182
-519
+522
+184
+555
 commute-cost-per-patch
 commute-cost-per-patch
 0.00
@@ -617,11 +606,11 @@ HORIZONTAL
 
 SLIDER
 13
-527
-182
-560
-delivery-cost-per-patch
-delivery-cost-per-patch
+563
+184
+596
+delivery-cost
+delivery-cost
 0.05
 1
 0.25
@@ -631,21 +620,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-1064
-58
-1248
-103
-NIL
-mean [base-land-cost] of landlords
-17
-1
-11
-
-MONITOR
-1065
-252
-1239
-297
+1047
+159
+1244
+204
 NIL
 mean [p-land-cost] of patches
 17
@@ -653,10 +631,10 @@ mean [p-land-cost] of patches
 11
 
 MONITOR
-1065
-302
-1234
-347
+1047
+212
+1245
+257
 NIL
 min [p-land-cost] of patches
 17
@@ -664,38 +642,10 @@ min [p-land-cost] of patches
 11
 
 MONITOR
-1064
-108
-1249
-153
-NIL
-min [base-land-cost] of landlords
-17
-1
-11
-
-BUTTON
-1069
-561
-1227
-594
-NIL
-ask people [set color white]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-MONITOR
-1066
-410
-1237
-455
+1047
+85
+1176
+130
 NIL
 mean [utility] of people
 17
@@ -703,11 +653,11 @@ mean [utility] of people
 11
 
 BUTTON
-1070
-597
-1374
-630
-Set patch colour by land cost (darker ~ cheaper)
+1047
+348
+1247
+381
+Set patch colour by land cost
 ask patches [set pcolor (p-land-cost + 9.75)]
 NIL
 1
@@ -720,40 +670,21 @@ NIL
 1
 
 MONITOR
-1066
-352
-1236
-397
+1047
+265
+1245
+310
 NIL
 max[p-land-cost] of patches
 17
 1
 11
 
-PLOT
-1070
-635
-1454
-827
-best-homed-people
-ticks
-perc best homed
-0.0
-1100.0
-0.0
-1000.0
-true
-false
-"plotxy ticks perc-best-homed-people" ""
-PENS
-"pen-best" 1.0 0 -2139308 true "" "plot perc-best-homed-people"
-"pen-ppl" 1.0 0 -16777216 true "" "plot count people"
-
 MONITOR
-1065
-462
-1199
-507
+1323
+85
+1461
+130
 NIL
 max [utility] of people
 17
@@ -761,10 +692,10 @@ max [utility] of people
 11
 
 MONITOR
-1065
-511
-1194
-556
+1182
+85
+1316
+130
 NIL
 min [utility] of people
 17
@@ -773,9 +704,9 @@ min [utility] of people
 
 SLIDER
 12
-334
+377
 184
-367
+410
 lov-median
 lov-median
 0.1
@@ -786,23 +717,12 @@ lov-median
 NIL
 HORIZONTAL
 
-MONITOR
-1278
-11
-1407
-56
-NIL
-amount-people-moved
-17
-1
-11
-
 BUTTON
-1231
-561
-1370
-594
-NIL
+1192
+402
+1247
+435
+X
 ask people [set label \"\"]
 NIL
 1
@@ -815,21 +735,10 @@ NIL
 1
 
 MONITOR
-1244
-412
-1448
-457
-NIL
-percentage-of-best-homed-people
-17
-1
-11
-
-MONITOR
+1047
+574
 1248
-511
-1397
-556
+619
 NIL
 perc-best-homed-people
 17
@@ -837,10 +746,10 @@ perc-best-homed-people
 11
 
 BUTTON
-1211
-469
-1434
-502
+1047
+534
+1248
+567
 NIL
 percentage-of-best-homed-people
 T
@@ -853,58 +762,11 @@ NIL
 NIL
 1
 
-SLIDER
-1459
-552
-1633
-585
-landlord-stock-balance
-landlord-stock-balance
-0
-100
-50.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1462
-512
-1640
-545
-landlord-cost-multiplier
-landlord-cost-multiplier
-0
-100
-50.0
-1
-1
-NIL
-HORIZONTAL
-
-BUTTON
-1484
-329
-1658
-362
-NIL
-ask people [ set utility 10]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 MONITOR
-1061
-173
-1255
-218
+1047
+33
+1237
+78
 NIL
 mean [spending-on-goods] of people
 17
@@ -912,21 +774,21 @@ mean [spending-on-goods] of people
 11
 
 MONITOR
-1260
-173
-1466
-218
+1242
+33
+1461
+78
 NIL
-mean [spending-on-land] of people
+mean [spending-on-land-density] of people
 17
 1
 11
 
 SLIDER
 13
-568
-182
-601
+604
+184
+637
 personal-bubble
 personal-bubble
 1
@@ -938,10 +800,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-13
-840
-206
-873
+1047
+446
+1247
+479
 Send people to perfect patch
 people-search-perfect
 NIL
@@ -955,50 +817,22 @@ NIL
 1
 
 SWITCH
-1459
-592
-1622
-625
-auto-landlord-stock
-auto-landlord-stock
+1250
+446
+1342
+479
+log!
+log!
 1
 1
 -1000
 
-SWITCH
-211
-840
-301
-873
-log!
-log!
-0
-1
--1000
-
 BUTTON
-1066
-838
-1534
-871
-NIL
-ask patches [set p-land-cost 1]\nask patches [set pcolor (p-land-cost + 9.75)]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-1492
-283
-1678
-316
-NIL
+1047
+490
+1247
+523
+Set Love of Variety ->
 ask people [set lov lov-test]
 NIL
 1
@@ -1011,10 +845,10 @@ NIL
 1
 
 SLIDER
-1492
-250
-1664
-283
+1250
+490
+1342
+523
 lov-test
 lov-test
 0
@@ -1026,10 +860,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-1251
-254
-1457
-299
+1256
+159
+1460
+204
 NIL
 mean [land-density-cost] of people
 17
@@ -1037,10 +871,10 @@ mean [land-density-cost] of people
 11
 
 MONITOR
-1251
-309
-1446
-354
+1256
+213
+1460
+258
 NIL
 min [land-density-cost] of people
 17
@@ -1048,47 +882,15 @@ min [land-density-cost] of people
 11
 
 MONITOR
-1252
-365
-1452
-410
+1256
+265
+1460
+310
 NIL
 max [land-density-cost] of people
 17
 1
 11
-
-BUTTON
-1454
-80
-1686
-113
-NIL
-ask people [set personal-bubble bbl]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-SLIDER
-1461
-51
-1633
-84
-bbl
-bbl
-1
-8
-3.125
-0.125
-1
-NIL
-HORIZONTAL
 
 TEXTBOX
 18
@@ -1102,9 +904,9 @@ Setup Parameters
 
 TEXTBOX
 16
-459
+504
 166
-477
+522
 Run Parameters
 12
 0.0
@@ -1119,6 +921,156 @@ land-or-density
 land-or-density
 "land" "density"
 1
+
+TEXTBOX
+1048
+12
+1198
+30
+Monitors
+14
+0.0
+0
+
+TEXTBOX
+1047
+138
+1147
+153
+Land
+12
+0.0
+0
+
+TEXTBOX
+1256
+139
+1372
+154
+Density
+12
+0.0
+0
+
+TEXTBOX
+1098
+385
+1197
+403
+(darker ~ cheaper)
+11
+0.0
+1
+
+BUTTON
+1047
+402
+1192
+435
+Set people's labels to wage
+ask people [\n  set label [wage-output] of firm!\n  set label-color [color] of firm!\n]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+TEXTBOX
+1048
+326
+1198
+344
+Testing
+14
+0.0
+0
+
+BUTTON
+13
+788
+184
+821
+Set Density Parameters
+set land-or-density \"density\"\nset num-landlords 1\nifelse(monocentric = true)\n[set num-firms 1]\n[set num-firms 4]\nset wage-gap 3\nset num-people 1000\nset lov-median 0.65\nset lov-range 0.05\nset city-radius% 50\nset commute-cost-per-patch 0.01\nset delivery-cost 0.25\nset personal-bubble 8
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+13
+707
+184
+740
+Revert to Default
+set num-landlords 900\nset landlords-visible false\nset num-people 1000\nset lov-median 0.65\nset lov-range 0.05\nset city-radius% 25\nset commute-cost-per-patch 0.01\nset delivery-cost 0.25
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+13
+747
+184
+780
+Set Land Parameters
+set land-or-density \"land\"\nset num-landlords 900\nset landlords-visible true\nif(monocentric = true)\n[set num-firms 1]\n
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SWITCH
+13
+667
+184
+700
+monocentric
+monocentric
+1
+1
+-1000
+
+TEXTBOX
+16
+649
+166
+667
+Parameters
+12
+0.0
+0
+
+SWITCH
+12
+211
+193
+244
+landlords-change-land-costs
+landlords-change-land-costs
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1142,20 +1094,31 @@ land-or-density
 (suggested things for the user to try to do (move sliders, switches, etc.) with the model)
 
 ## EXTENDING THE MODEL
+vary the land cost of a patch based on its distance from the land lord. 
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+add personality paramaters into the people agents to make their behaviour more organic 
+simulate concepts such as frugality and favrotism to allow the agents a more varied behaviour set. 
+
+make some of the varibles automatic to clean up the UI such as the number of factories and landlords.
 
 ## NETLOGO FEATURES
+Agent breeds are extensivly used by this model to simulate diffrent types of agent produced by the economic system. Spacial simulation is a large part of this model and as such it uses alot of the spacial-relational tools within net-logo. 
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+Colors and shapes are used extensivly to differentiate diffrent breeds of agent and diffrent patch properties based on the model settings
 
 ## RELATED MODELS
 
 (models in the NetLogo Models Library and elsewhere which are of related interest)
 
 ## CREDITS AND REFERENCES
+written and designed by:
+Danny 
+Laura 
+Anthony
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+
+based on: https://tinyurl.com/yas3hcsd
+An agent model of urban economics: Digging into emergence
 @#$#@#$#@
 default
 true
